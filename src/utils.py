@@ -3,7 +3,7 @@ import random
 
 import pygame
 
-from src.constants import OUTLINE
+from src.constants import OUTLINE, OVERHEAD_BOTTOM
 
 
 def draw_rounded_rect(surface, rect, color, radius, outline=2, outline_color=OUTLINE):
@@ -40,11 +40,17 @@ def check_collision(player, obstacle):
     py = player.y + 6
     pw = player.w - 14
     ph = player.slide_h - 8
+    if obstacle.overhead:
+        obs_top = 0
+        obs_bottom = OVERHEAD_BOTTOM
+    else:
+        obs_top = obstacle.y
+        obs_bottom = obstacle.y + obstacle.h
     return (
         px < obstacle.x + obstacle.w
         and px + pw > obstacle.x
-        and py < obstacle.y + obstacle.h
-        and py + ph > obstacle.y
+        and py < obs_bottom
+        and py + ph > obs_top
     )
 
 

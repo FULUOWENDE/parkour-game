@@ -83,6 +83,7 @@ class Obstacle:
         self.w = w
         self.h = h
         self.scored = False
+        self.overhead = False
 
     def update(self, speed):
         self.x -= speed
@@ -428,8 +429,8 @@ class ElectricBike(Obstacle):
 # ── TreeBranch (低垂树枝) ──────────────────────────────────────
 class TreeBranch(Obstacle):
     def __init__(self, x=0):
-        # collision box is the bottom danger zone only
         super().__init__(x, OVERHEAD_BOTTOM - 28, 72, 28)
+        self.overhead = True
 
     def draw(self, surface):
         x, y = self.x, self.y  # y = OVERHEAD_BOTTOM - 28
@@ -491,6 +492,7 @@ class TreeBranch(Obstacle):
 class CampusBanner(Obstacle):
     def __init__(self, x=0):
         super().__init__(x, OVERHEAD_BOTTOM - 30, 100, 30)
+        self.overhead = True
         self._banner_texts = [
             _get_obs_font(13).render("热烈欢迎", True, BANNER_TEXT),
             _get_obs_font(13).render("新同学", True, BANNER_TEXT),
@@ -542,6 +544,7 @@ class CampusBanner(Obstacle):
 class BarrierGate(Obstacle):
     def __init__(self, x=0):
         super().__init__(x, OVERHEAD_BOTTOM - 26, 84, 26)
+        self.overhead = True
 
     def draw(self, surface):
         x, y = self.x, self.y
