@@ -1,4 +1,5 @@
 import math
+import os
 import random
 
 import pygame
@@ -59,19 +60,16 @@ from src.utils import (
 )
 
 # ── Font cache for obstacle text ────────────────────────────────
+_OBSTACLE_FONT_PATH = os.path.join(os.path.dirname(__file__), "resources", "fonts", "NotoSansSC-Regular.ttf")
 _FONT_CACHE = {}
 
 
 def _get_obs_font(size):
     if size not in _FONT_CACHE:
         try:
-            font = pygame.font.SysFont("stheitimedium", size)
-            test = font.render("早", True, (255, 255, 255))
-            if test.get_width() < 5:
-                raise ValueError("No Chinese glyph")
+            _FONT_CACHE[size] = pygame.font.Font(_OBSTACLE_FONT_PATH, size)
         except Exception:
-            font = pygame.font.Font(None, size)
-        _FONT_CACHE[size] = font
+            _FONT_CACHE[size] = pygame.font.Font(None, size)
     return _FONT_CACHE[size]
 
 

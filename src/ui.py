@@ -20,22 +20,20 @@ from src.constants import (
 )
 
 
+_FONT_REGULAR = os.path.join(os.path.dirname(__file__), "resources", "fonts", "NotoSansSC-Regular.ttf")
+_FONT_BOLD = os.path.join(os.path.dirname(__file__), "resources", "fonts", "NotoSansSC-Bold.ttf")
+_FONT_CACHE = {}
+
+
 def _get_font(size, bold=False):
-    names = [
-        "stheitimedium", "stheitilight", "notosanssc", "notoserifsc",
-        "pingfangsc", "heiti sc", "stheitisc",
-        "microsoftyahei", "simhei", "arialunicode", "sans-serif",
-    ]
-    for name in names:
+    key = (size, bold)
+    if key not in _FONT_CACHE:
+        path = _FONT_BOLD if bold else _FONT_REGULAR
         try:
-            font = pygame.font.SysFont(name, size, bold=bold)
-            test = font.render("早", True, (255, 255, 255))
-            w, _ = test.get_size()
-            if w > 5:
-                return font
+            _FONT_CACHE[key] = pygame.font.Font(path, size)
         except Exception:
-            pass
-    return pygame.font.Font(None, size)
+            _FONT_CACHE[key] = pygame.font.Font(None, size)
+    return _FONT_CACHE[key]
 
 
 class UI:
@@ -142,12 +140,12 @@ class UI:
         # Title
         title = self.font_title.render("赶 早 八", True, TEXT_LIGHT)
         tw, th = title.get_size()
-        surface.blit(title, (WIDTH // 2 - tw // 2, cy - 90))
+        surface.blit(title, (WIDTH // 2 - tw // 2, cy - 110))
 
         # Subtitle
         sub = self.font_lg.render("Campus Rush", True, TEXT_ACCENT)
         sw, sh = sub.get_size()
-        surface.blit(sub, (WIDTH // 2 - sw // 2, cy - 38))
+        surface.blit(sub, (WIDTH // 2 - sw // 2, cy - 5))
 
         # Controls
         ctrl1 = self.font_md.render("空格/↑/W — 跳跃（可二段跳）", True, (220, 220, 220))
@@ -156,9 +154,9 @@ class UI:
         cw1, ch1 = ctrl1.get_size()
         cw2, ch2 = ctrl2.get_size()
         cw3, ch3 = ctrl3.get_size()
-        surface.blit(ctrl1, (WIDTH // 2 - cw1 // 2, cy + 20))
-        surface.blit(ctrl2, (WIDTH // 2 - cw2 // 2, cy + 48))
-        surface.blit(ctrl3, (WIDTH // 2 - cw3 // 2, cy + 72))
+        surface.blit(ctrl1, (WIDTH // 2 - cw1 // 2, cy + 35))
+        surface.blit(ctrl2, (WIDTH // 2 - cw2 // 2, cy + 68))
+        surface.blit(ctrl3, (WIDTH // 2 - cw3 // 2, cy + 98))
 
         # Pulsing prompt
         pulse = 0.6 + 0.4 * math.sin(frame * 0.06)
@@ -166,12 +164,12 @@ class UI:
         prompt_surf = pygame.Surface(prompt.get_size(), pygame.SRCALPHA)
         prompt_surf.blit(prompt, (0, 0))
         prompt_surf.set_alpha(int(pulse * 255))
-        surface.blit(prompt_surf, (WIDTH // 2 - prompt.get_width() // 2, cy + 120))
+        surface.blit(prompt_surf, (WIDTH // 2 - prompt.get_width() // 2, cy + 140))
 
         if self.high_score > 0:
             hs_text = self.font_sm.render(f"历史最高分：{self.high_score}", True, (200, 200, 200))
             hsw, hsh = hs_text.get_size()
-            surface.blit(hs_text, (WIDTH // 2 - hsw // 2, cy + 160))
+            surface.blit(hs_text, (WIDTH // 2 - hsw // 2, cy + 182))
 
     # ── Game Over Screen ───────────────────────────────────────────
     def draw_game_over_screen(self, surface, frame, score, new_record):
@@ -184,22 +182,22 @@ class UI:
         # Game Over
         go_text = self.font_title.render("GAME OVER", True, TEXT_RED)
         gw, gh = go_text.get_size()
-        surface.blit(go_text, (WIDTH // 2 - gw // 2, cy - 80))
+        surface.blit(go_text, (WIDTH // 2 - gw // 2, cy - 105))
 
         # Score
         score_text = self.font_xl.render(f"得分：{int(score)}", True, TEXT_LIGHT)
         sw, sh = score_text.get_size()
-        surface.blit(score_text, (WIDTH // 2 - sw // 2, cy - 20))
+        surface.blit(score_text, (WIDTH // 2 - sw // 2, cy + 0))
 
         # New record or best
         if new_record:
             rec_text = self.font_lg.render("★  新纪录  ★", True, TEXT_ACCENT)
             rw, rh = rec_text.get_size()
-            surface.blit(rec_text, (WIDTH // 2 - rw // 2, cy + 20))
+            surface.blit(rec_text, (WIDTH // 2 - rw // 2, cy + 62))
         else:
             best_text = self.font_md.render(f"最高分：{self.high_score}", True, (200, 200, 200))
             bw, bh = best_text.get_size()
-            surface.blit(best_text, (WIDTH // 2 - bw // 2, cy + 20))
+            surface.blit(best_text, (WIDTH // 2 - bw // 2, cy + 62))
 
         # Pulsing restart
         pulse = 0.6 + 0.4 * math.sin(frame * 0.06)
@@ -208,4 +206,4 @@ class UI:
         restart_surf.blit(restart, (0, 0))
         restart_surf.set_alpha(int(pulse * 255))
         rsw, rsh = restart_surf.get_size()
-        surface.blit(restart_surf, (WIDTH // 2 - rsw // 2, cy + 75))
+        surface.blit(restart_surf, (WIDTH // 2 - rsw // 2, cy + 110))

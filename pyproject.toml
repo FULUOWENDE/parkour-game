@@ -3,10 +3,16 @@ name = "campus-rush"
 version = "0.1.0"
 description = "赶早八 · Campus Rush - A university campus parkour game"
 requires-python = ">=3.12"
-dependencies = ["pygame-ce>=2.5.0"]
+dependencies = [
+    "pygame-ce>=2.5.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
+
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
 
 [build-system]
 requires = ["hatchling"]
