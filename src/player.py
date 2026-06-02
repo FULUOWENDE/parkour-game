@@ -3,6 +3,7 @@ import math
 import pygame
 
 from src.constants import (
+    CHAR_LIST,
     DB_JUMP_VEL,
     GRAVITY,
     GROUND_Y,
@@ -25,7 +26,7 @@ from src.utils import draw_circle_outlined, draw_rounded_rect, spawn_burst
 
 
 class Player:
-    def __init__(self):
+    def __init__(self, char_config=None):
         self.x = PLAYER_X
         self.w = PLAYER_W
         self.h = PLAYER_H
@@ -45,10 +46,38 @@ class Player:
         # pre-allocated surfaces for per-frame use
         self._trail_surf_cache = {}
         self._ring_surf = None
+        # apply character config
+        self._apply_char_config(char_config)
+
+    def _apply_char_config(self, config):
+        """Apply character-specific colors, jump/slide/speed modifiers."""
+        if config is None:
+            config = CHAR_LIST[0]  # default to first character
+        self.char_config = config
+        # Colors
+        self.body_color = config.get("color_body", PLAYER_BODY)
+        self.skin_color = config.get("color_skin", PLAYER_SKIN)
+        self.jeans_color = config.get("color_jeans", PLAYER_JEANS)
+        self.bag_color = config.get("color_bag", PLAYER_BAG)
+        self.hair_color = config.get("color_hair", PLAYER_HAIR)
+        self.shoe_color = config.get("color_shoe", PLAYER_SHOE)
+        # Attribute multipliers
+        self.jump_mul = config.get("jump_mul", 1.0)
+        self.slide_mul = config.get("slide_mul", 1.0)
+        self.speed_mul = config.get("speed_mul", 1.0)
 
     @property
     def slide_h(self):
         return PLAYER_SLIDE_H if self.sliding else self.h
+
+    @property
+    def effective_collision_h(self):
+        """Collision height adjusted by character slide_mul.
+
+        Larger slide_mul = smaller collision area = more forgiving when sliding.
+        """
+        base = self.slide_h - 8
+        return max(4, base / self.slide_mul)
 
     @property
     def top(self):
@@ -68,7 +97,8 @@ class Player:
 
     def jump(self, particles):
         if self.jumps < self.max_jumps:
-            self.vy = JUMP_VEL if self.jumps == 0 else DB_JUMP_VEL
+            base_vel = JUMP_VEL if self.jumps == 0 else DB_JUMP_VEL
+            self.vy = base_vel * self.jump_mul
             self.jumps += 1
             particles.extend(
                 spawn_burst(self.cx, self.bot, 10, [(255, 255, 255), (255, 200, 50)])
@@ -216,43 +246,43 @@ class Player:
         right_foot_x = cx + 5 - leg_swing
         # back leg
         pygame.draw.line(surface, OUTLINE, (cx - 5, foot_y - 18), (left_foot_x, foot_y + 16), 7)
-        pygame.draw.line(surface, PLAYER_JEANS, (cx - 5, foot_y - 18), (left_foot_x, foot_y + 16), 5)
+        pygame.draw.line(surface, self.jeans_color, (cx - 5, foot_y - 18), (left_foot_x, foot_y + 16), 5)
         # shoes
         pygame.draw.ellipse(surface, OUTLINE, (left_foot_x - 6, foot_y + 12, 12, 8))
-        pygame.draw.ellipse(surface, PLAYER_SHOE, (left_foot_x - 5, foot_y + 13, 10, 6))
+        pygame.draw.ellipse(surface, self.shoe_color, (left_foot_x - 5, foot_y + 13, 10, 6))
         # front leg
         pygame.draw.line(surface, OUTLINE, (cx + 5, foot_y - 18), (right_foot_x, foot_y + 16), 7)
-        pygame.draw.line(surface, PLAYER_JEANS, (cx + 5, foot_y - 18), (right_foot_x, foot_y + 16), 5)
+        pygame.draw.line(surface, self.jeans_color, (cx + 5, foot_y - 18), (right_foot_x, foot_y + 16), 5)
         pygame.draw.ellipse(surface, OUTLINE, (right_foot_x - 6, foot_y + 12, 12, 8))
-        pygame.draw.ellipse(surface, PLAYER_SHOE, (right_foot_x - 5, foot_y + 13, 10, 6))
+        pygame.draw.ellipse(surface, self.shoe_color, (right_foot_x - 5, foot_y + 13, 10, 6))
 
         # backpack (behind body)
         bag_rect = pygame.Rect(x + w - 4, y + 18, 10, h - 30)
-        draw_rounded_rect(surface, bag_rect, PLAYER_BAG, 3)
+        draw_rounded_rect(surface, bag_rect, self.bag_color, 3)
 
         # body (jacket)
         body_rect = pygame.Rect(x + 3, y + 20, w - 6, h - 34)
-        draw_rounded_rect(surface, body_rect, PLAYER_BODY, 7)
+        draw_rounded_rect(surface, body_rect, self.body_color, 7)
 
         # arms
         arm_phase = self.leg_phase + math.pi
         arm_swing = math.cos(arm_phase) * 9
         # back arm
         pygame.draw.line(surface, OUTLINE, (cx - 2, y + 28), (cx - 2 + arm_swing, y + 45), 6)
-        pygame.draw.line(surface, PLAYER_BODY, (cx - 2, y + 28), (cx - 2 + arm_swing, y + 45), 4)
+        pygame.draw.line(surface, self.body_color, (cx - 2, y + 28), (cx - 2 + arm_swing, y + 45), 4)
         # front arm
         front_swing = math.cos(arm_phase + math.pi) * 9
         pygame.draw.line(surface, OUTLINE, (cx + 2, y + 28), (cx + 2 + front_swing, y + 45), 6)
-        pygame.draw.line(surface, PLAYER_BODY, (cx + 2, y + 28), (cx + 2 + front_swing, y + 45), 4)
+        pygame.draw.line(surface, self.body_color, (cx + 2, y + 28), (cx + 2 + front_swing, y + 45), 4)
 
         # head
         head_cx = int(cx)
         head_cy = int(y + 13)
         # hair (behind head)
         hair_rect = pygame.Rect(head_cx - 10, head_cy - 16, 20, 16)
-        draw_rounded_rect(surface, hair_rect, PLAYER_HAIR, 5)
+        draw_rounded_rect(surface, hair_rect, self.hair_color, 5)
         # head
-        draw_circle_outlined(surface, (head_cx, head_cy), 12, PLAYER_SKIN)
+        draw_circle_outlined(surface, (head_cx, head_cy), 12, self.skin_color)
         # eye
         eye_white = pygame.Rect(head_cx + 4, head_cy - 4, 8, 8)
         pygame.draw.ellipse(surface, (255, 255, 255), eye_white)
@@ -266,14 +296,14 @@ class Player:
 
         # body horizontal
         body_rect = pygame.Rect(x + 6, y + 12, w - 12, 14)
-        draw_rounded_rect(surface, body_rect, PLAYER_BODY, 6)
+        draw_rounded_rect(surface, body_rect, self.body_color, 6)
         # backpack
         bag_rect = pygame.Rect(x + w - 6, y + 8, 8, 20)
-        draw_rounded_rect(surface, bag_rect, PLAYER_BAG, 3)
+        draw_rounded_rect(surface, bag_rect, self.bag_color, 3)
         # head at front (right side)
         head_cx = int(x + w - 10)
         head_cy = int(y + 8)
-        draw_circle_outlined(surface, (head_cx, head_cy), 9, PLAYER_SKIN)
+        draw_circle_outlined(surface, (head_cx, head_cy), 9, self.skin_color)
         # eye
         eye_white = pygame.Rect(head_cx + 3, head_cy - 3, 6, 6)
         pygame.draw.ellipse(surface, (255, 255, 255), eye_white)
@@ -281,7 +311,7 @@ class Player:
         pygame.draw.circle(surface, (20, 20, 20), (head_cx + 5, head_cy - 1), 2)
         # hair
         hair_rect = pygame.Rect(head_cx - 8, head_cy - 12, 16, 12)
-        draw_rounded_rect(surface, hair_rect, PLAYER_HAIR, 4)
+        draw_rounded_rect(surface, hair_rect, self.hair_color, 4)
         # legs extended left
         pygame.draw.line(surface, OUTLINE, (x + 4, y + 18), (x - 4, y + 22), 6)
-        pygame.draw.line(surface, PLAYER_JEANS, (x + 4, y + 18), (x - 4, y + 22), 4)
+        pygame.draw.line(surface, self.jeans_color, (x + 4, y + 18), (x - 4, y + 22), 4)

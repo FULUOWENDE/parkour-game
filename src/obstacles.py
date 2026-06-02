@@ -667,8 +667,13 @@ class BarrierGate(Obstacle):
 # ── BookShield (免撞书本 — 护盾 buff) ──────────────────────────
 class BookShield(Obstacle):
     def __init__(self, x=0):
-        super().__init__(x, GROUND_Y - 30, 26, 22)
+        super().__init__(x, GROUND_Y - 38, 34, 30)
         self.is_item = True
+        # pre-render glow surface (reuse and adjust alpha per-frame)
+        self._glow_base = pygame.Surface((self.w + 14, self.h + 14), pygame.SRCALPHA)
+        for r in range(6, 2, -1):
+            a = 60 // (r - 1)
+            pygame.draw.ellipse(self._glow_base, (255, 215, 0, a), self._glow_base.get_rect(), width=r)
 
     def apply_effect(self, game):
         game.player.shield_timer = SHIELD_DURATION
@@ -677,36 +682,51 @@ class BookShield(Obstacle):
         x, y = self.x, self.y
         w, h = self.w, self.h
 
-        # floating bobbing effect
-        bob = math.sin(frame * 0.06) * 3
+        # floating bobbing effect (larger amplitude)
+        bob = math.sin(frame * 0.05) * 5
         by = y + bob
 
-        # glow halo
-        glow_surf = pygame.Surface((w + 8, h + 8), pygame.SRCALPHA)
-        pulse = 0.4 + 0.2 * math.sin(frame * 0.1)
-        alpha = int(pulse * 120)
-        pygame.draw.ellipse(glow_surf, (255, 215, 0, alpha), glow_surf.get_rect())
-        surface.blit(glow_surf, (x - 4, by - 4))
+        # pulsing glow (copy pre-rendered base, adjust overall alpha)
+        pulse = 0.5 + 0.5 * math.sin(frame * 0.08)
+        glow = self._glow_base.copy()
+        glow.set_alpha(int(100 + pulse * 100))
+        surface.blit(glow, (x - 7, by - 7))
 
-        # book body
+        # book body (larger)
         book_rect = pygame.Rect(x + 2, by + 2, w - 4, h - 4)
-        pygame.draw.rect(surface, (40, 60, 140), book_rect, border_radius=2)
-        pygame.draw.rect(surface, OUTLINE, book_rect, 1, border_radius=2)
+        pygame.draw.rect(surface, (30, 50, 130), book_rect, border_radius=3)
+        pygame.draw.rect(surface, (255, 215, 0), book_rect, width=2, border_radius=3)
         # spine highlight
-        pygame.draw.rect(surface, (60, 85, 175), (x + 4, by + 3, 3, h - 8), border_radius=1)
+        pygame.draw.rect(surface, (50, 75, 165), (x + 4, by + 3, 4, h - 8), border_radius=2)
         # pages edge (white lines)
-        for py in range(int(by + 5), int(by + h - 6), 4):
-            pygame.draw.line(surface, (255, 255, 240), (x + 8, py), (x + w - 4, py), 1)
-        # title marks
-        pygame.draw.line(surface, (255, 215, 0), (x + 8, by + 7), (x + 14, by + 7), 1)
-        pygame.draw.line(surface, (255, 215, 0), (x + 8, by + 10), (x + 12, by + 10), 1)
+        for py in range(int(by + 6), int(by + h - 8), 5):
+            pygame.draw.line(surface, (255, 255, 240), (x + 10, py), (x + w - 6, py), 1)
+        # golden "shield" icon (simplified ⛊ on cover)
+        scx = x + w // 2
+        scy = int(by + 10)
+        # shield shape
+        shield_pts = [
+            (scx, scy - 5),
+            (scx + 5, scy - 2),
+            (scx + 4, scy + 4),
+            (scx, scy + 6),
+            (scx - 4, scy + 4),
+            (scx - 5, scy - 2),
+        ]
+        pygame.draw.polygon(surface, (255, 215, 0), shield_pts)
+        pygame.draw.polygon(surface, OUTLINE, shield_pts, 1)
 
 
 # ── SpeedBun (变速包子 — 减速 buff) ────────────────────────────
 class SpeedBun(Obstacle):
     def __init__(self, x=0):
-        super().__init__(x, GROUND_Y - 28, 22, 22)
+        super().__init__(x, GROUND_Y - 36, 30, 28)
         self.is_item = True
+        # pre-render glow base
+        self._glow_base = pygame.Surface((self.w + 14, self.h + 14), pygame.SRCALPHA)
+        for r in range(6, 2, -1):
+            a = 60 // (r - 1)
+            pygame.draw.ellipse(self._glow_base, (100, 200, 255, a), self._glow_base.get_rect(), width=r)
 
     def apply_effect(self, game):
         game.player.slow_timer = SPEED_SLOW_DURATION
@@ -717,28 +737,34 @@ class SpeedBun(Obstacle):
         w, h = self.w, self.h
 
         # floating bobbing
-        bob = math.sin(frame * 0.06 + 1.5) * 3
+        bob = math.sin(frame * 0.05 + 1.5) * 5
         by = y + bob
 
-        # blue glow
-        glow_surf = pygame.Surface((w + 8, h + 8), pygame.SRCALPHA)
-        pulse = 0.4 + 0.2 * math.sin(frame * 0.1 + 1.5)
-        alpha = int(pulse * 120)
-        pygame.draw.ellipse(glow_surf, (100, 200, 255, alpha), glow_surf.get_rect())
-        surface.blit(glow_surf, (x - 4, by - 4))
+        # blue pulsing glow
+        pulse = 0.5 + 0.5 * math.sin(frame * 0.08 + 1.5)
+        glow = self._glow_base.copy()
+        glow.set_alpha(int(100 + pulse * 100))
+        surface.blit(glow, (x - 7, by - 7))
 
-        # bun body (white oval)
-        bun_rect = pygame.Rect(x + 2, by + 4, w - 4, h - 6)
+        # bun body (white oval, larger)
+        bun_rect = pygame.Rect(x + 3, by + 5, w - 6, h - 8)
         pygame.draw.ellipse(surface, (255, 245, 230), bun_rect)
-        pygame.draw.ellipse(surface, OUTLINE, bun_rect, 1)
+        pygame.draw.ellipse(surface, OUTLINE, bun_rect, 2)
         # bun top highlight
-        hl_rect = pygame.Rect(x + 6, by + 5, w - 14, 6)
+        hl_rect = pygame.Rect(x + 8, by + 6, w - 18, 8)
         pygame.draw.ellipse(surface, (255, 252, 245), hl_rect)
-        # bun fold line
-        pygame.draw.line(surface, (220, 210, 190), (x + w // 2, by + 6), (x + w // 2, by + h - 8), 1)
-        # small steam wisps
-        for sx, sy, sr in [(x + w // 2 - 4, by - 2, 2), (x + w // 2 + 3, by - 4, 2)]:
-            steam_alpha = int(80 + 40 * math.sin(frame * 0.15 + sx))
+        # bun fold line (vertical crease)
+        pygame.draw.line(surface, (220, 210, 190), (x + w // 2, by + 7), (x + w // 2, by + h - 10), 2)
+        # snowflake icon on bun
+        sf_cx = x + w // 2
+        sf_cy = int(by + h // 2 + 2)
+        for ang in [0, math.pi / 3, 2 * math.pi / 3]:
+            dx = math.cos(ang) * 5
+            dy = math.sin(ang) * 5
+            pygame.draw.line(surface, (100, 180, 255), (sf_cx - dx, sf_cy - dy), (sf_cx + dx, sf_cy + dy), 2)
+        # steam wisps above bun (pre-rendered)
+        for sx, sy, sr in [(x + w // 2 - 5, by - 4, 3), (x + w // 2 + 6, by - 7, 2), (x + w // 2, by - 10, 2)]:
+            steam_alpha = int(100 + 60 * math.sin(frame * 0.12 + sx))
             steam_a = max(0, min(255, steam_alpha))
             steam_s = pygame.Surface((sr * 2 + 2, sr * 2 + 2), pygame.SRCALPHA)
             pygame.draw.circle(steam_s, (255, 255, 255, steam_a), (sr + 1, sr + 1), sr)
@@ -812,12 +838,13 @@ OBSTACLE_TYPES = [
 ]
 
 
-def obstacle_factory(score, weather=None):
-    """Create an obstacle or item based on current score and weather.
+def obstacle_factory(score, weather=None, mode=0):
+    """Create an obstacle or item based on current score, weather, and game mode.
 
     Args:
         score: current game score (affects difficulty pool)
         weather: current weather string (affects raindrop spawning)
+        mode: game mode — 0=普通早八(normal), 1=极限冲刺(extreme), 2=悠闲逛校园(relaxed)
     """
     # ── Item spawn chance (scales with score) ──
     item_chance = ITEM_SPAWN_CHANCE + (score / 5000) * (ITEM_SPAWN_CHANCE_MAX - ITEM_SPAWN_CHANCE)
@@ -830,15 +857,23 @@ def obstacle_factory(score, weather=None):
     if weather == WEATHER_RAINY and random.random() < 0.15:
         return Raindrop(WIDTH + random.randint(0, 200))
 
-    # ── Normal obstacle pools ──
-    if score < 300:
-        # Easy: mostly simple ground obstacles, occasional overhead
-        pool = [0, 0, 0, 1, 2, 6]
-    elif score < 800:
-        # Medium: all types, balanced mix
-        pool = [0, 1, 2, 3, 4, 5, 6, 7, 8]
-    else:
-        # Hard: more overhead obstacles, more variety
+    # ── Obstacle pools based on game mode ──
+    if mode == 1:
+        # 极限冲刺: always hard pool with more overhead obstacles
         pool = [0, 1, 1, 2, 3, 4, 5, 5, 6, 6, 7, 7, 8]
+    elif mode == 2:
+        # 悠闲逛校园: easy pool only, no overhead obstacles
+        pool = [0, 0, 0, 1, 1, 2, 3, 4]
+    else:
+        # 普通早八: original difficulty curve
+        if score < 300:
+            # Easy: mostly simple ground obstacles, occasional overhead
+            pool = [0, 0, 0, 1, 2, 6]
+        elif score < 800:
+            # Medium: all types, balanced mix
+            pool = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+        else:
+            # Hard: more overhead obstacles, more variety
+            pool = [0, 1, 1, 2, 3, 4, 5, 5, 6, 6, 7, 7, 8]
     idx = random.choice(pool)
     return OBSTACLE_TYPES[idx](WIDTH + 40)

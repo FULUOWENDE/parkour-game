@@ -76,7 +76,7 @@ class UI:
         return False
 
     # ── HUD ────────────────────────────────────────────────────────
-    def draw_hud(self, surface, score, speed, player):
+    def draw_hud(self, surface, score, speed, player, weather=None):
         # Score background
         hud_w = 200
         hud_h = 56
@@ -85,6 +85,8 @@ class UI:
         if player.shield_timer > 0:
             extra_h += 18
         if player.slow_timer > 0:
+            extra_h += 18
+        if weather and weather != "sunny":
             extra_h += 18
         hud_bg = pygame.Surface((hud_w, hud_h + extra_h), pygame.SRCALPHA)
         pygame.draw.rect(hud_bg, HUD_BG, hud_bg.get_rect(), border_radius=6)
@@ -100,6 +102,14 @@ class UI:
 
         # Status indicators
         status_y = 70
+        if weather and weather != "sunny":
+            weather_label_text = "☁ 阴天" if weather == "cloudy" else "🌧 雨天"
+            weather_label = self.font_sm.render(weather_label_text, True, (200, 210, 230))
+            weather_bg = pygame.Surface((weather_label.get_width() + 12, 16), pygame.SRCALPHA)
+            pygame.draw.rect(weather_bg, HUD_BG, weather_bg.get_rect(), border_radius=4)
+            surface.blit(weather_bg, (12, status_y))
+            surface.blit(weather_label, (18, status_y + 1))
+            status_y += 18
         if player.shield_timer > 0:
             secs = player.shield_timer / 60.0
             shield_label = self.font_sm.render(f"🛡 护盾 {secs:.1f}s", True, TEXT_SHIELD)

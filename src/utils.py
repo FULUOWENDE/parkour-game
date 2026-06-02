@@ -39,7 +39,7 @@ def check_collision(player, obstacle):
     px = player.x + 7
     py = player.y + 6
     pw = player.w - 14
-    ph = player.slide_h - 8
+    ph = player.effective_collision_h
     if obstacle.overhead:
         obs_top = 0
         obs_bottom = OVERHEAD_BOTTOM
