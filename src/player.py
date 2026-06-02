@@ -39,6 +39,12 @@ class Player:
         self.trail = []
         self.dead = False
         self._land_squash = 0  # squash frames remaining
+        # item effects
+        self.shield_timer = 0   # frames of shield remaining (absorbs 1 hit)
+        self.slow_timer = 0     # frames of slow effect remaining
+        # pre-allocated surfaces for per-frame use
+        self._trail_surf_cache = {}
+        self._ring_surf = None
 
     @property
     def slide_h(self):
@@ -92,6 +98,12 @@ class Player:
             if self.slide_timer <= 0:
                 self.sliding = False
 
+        # item effect countdowns
+        if self.shield_timer > 0:
+            self.shield_timer -= 1
+        if self.slow_timer > 0:
+            self.slow_timer -= 1
+
         # gravity
         self.vy += GRAVITY
         self.y += self.vy
@@ -110,15 +122,22 @@ class Player:
         if self.jumps == 0 and not self.sliding:
             self.leg_phase += 0.22 * (speed / base_speed)
 
-    def draw(self, surface):
+    def draw(self, surface, frame=0):
         # trail
         for t in self.trail:
             if t["a"] <= 0:
                 continue
             alpha = int(max(0, t["a"]) * 100)
-            trail_surf = pygame.Surface((int(self.w * 0.4), int(self.slide_h * 0.25)), pygame.SRCALPHA)
-            pygame.draw.ellipse(trail_surf, (255, 200, 100, alpha), trail_surf.get_rect())
-            surface.blit(trail_surf, (t["x"] - trail_surf.get_width() / 2, t["y"] - trail_surf.get_height() / 2))
+            tw = int(self.w * 0.4)
+            th = int(self.slide_h * 0.25)
+            key = (tw, th)
+            if key not in self._trail_surf_cache:
+                s = pygame.Surface(key, pygame.SRCALPHA)
+                pygame.draw.ellipse(s, (255, 200, 100, 255), s.get_rect())
+                self._trail_surf_cache[key] = s
+            trail_s = self._trail_surf_cache[key].copy()
+            trail_s.set_alpha(alpha)
+            surface.blit(trail_s, (t["x"] - tw / 2, t["y"] - th / 2))
 
         x, y = self.x, self.y
         w, h = self.w, self.slide_h
@@ -139,21 +158,50 @@ class Player:
 
         # double-jump ring
         if self.jumps == 1:
-            ring_surf = pygame.Surface((w * 2, h * 2), pygame.SRCALPHA)
-            for i in range(16):
-                ang = i * math.pi * 2 / 16
-                if i % 2 == 0:
-                    start_a = ang
-                    end_a = ang + math.pi * 2 / 16 * 0.8
-                    pts = []
-                    for a_step in range(5):
-                        a = start_a + (end_a - start_a) * a_step / 4
-                        px_val = w + math.cos(a) * w * 0.78
-                        py_val = h + math.sin(a) * h * 0.78
-                        pts.append((px_val, py_val))
-                    if len(pts) >= 2:
-                        pygame.draw.lines(ring_surf, (255, 200, 50, 120), False, pts, 2)
-            surface.blit(ring_surf, (cx - w, self.cy - h))
+            self._draw_jump_ring(surface, w, h)
+
+        # shield glow
+        if self.shield_timer > 0:
+            self._draw_shield_glow(surface, frame)
+
+    def _draw_jump_ring(self, surface, w, h):
+        """Draw the double-jump indicator ring (cached)."""
+        if self._ring_surf is None:
+            self._ring_surf = pygame.Surface((w * 2, h * 2), pygame.SRCALPHA)
+        else:
+            self._ring_surf.fill((0, 0, 0, 0))
+        for i in range(16):
+            ang = i * math.pi * 2 / 16
+            if i % 2 == 0:
+                start_a = ang
+                end_a = ang + math.pi * 2 / 16 * 0.8
+                pts = []
+                for a_step in range(5):
+                    a = start_a + (end_a - start_a) * a_step / 4
+                    px_val = w + math.cos(a) * w * 0.78
+                    py_val = h + math.sin(a) * h * 0.78
+                    pts.append((px_val, py_val))
+                if len(pts) >= 2:
+                    pygame.draw.lines(self._ring_surf, (255, 200, 50, 120), False, pts, 2)
+        surface.blit(self._ring_surf, (self.cx - w, self.cy - h))
+
+    def _draw_shield_glow(self, surface, frame):
+        """Draw golden shield glow around player."""
+        pulse = 0.7 + 0.3 * math.sin(frame * 0.15)
+        alpha = int(pulse * 140)
+        radius = int(max(self.w, self.slide_h) * 1.1)
+        glow = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+        # outer glow ring
+        for r_offset in range(3):
+            a = alpha // (r_offset + 2)
+            pygame.draw.circle(
+                glow,
+                (255, 215, 0, max(0, a)),
+                (radius, radius),
+                radius - r_offset * 2,
+                width=2,
+            )
+        surface.blit(glow, (self.cx - radius, self.cy - radius))
 
     def _draw_running(self, surface, x, y, w, h, cx, scale_x, scale_y):
         leg_swing = math.sin(self.leg_phase) * 14

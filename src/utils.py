@@ -54,6 +54,19 @@ def check_collision(player, obstacle):
     )
 
 
+# ── Particle surface cache (reuse by radius) ─────────────────
+_PARTICLE_SURF_CACHE = {}
+
+
+def _get_particle_surf(radius):
+    """Get or create a pre-allocated surface for a particle of given radius."""
+    key = int(radius)
+    if key not in _PARTICLE_SURF_CACHE:
+        size = int(radius * 2)
+        _PARTICLE_SURF_CACHE[key] = pygame.Surface((size, size), pygame.SRCALPHA)
+    return _PARTICLE_SURF_CACHE[key]
+
+
 class Particle:
     def __init__(self, x, y, vx, vy, life, decay, radius, color):
         self.x = x
@@ -80,8 +93,9 @@ class Particle:
             return
         alpha = int(max(0, self.life * 255))
         color = (*self.color, alpha) if len(self.color) == 3 else self.color
-        temp = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
-        pygame.draw.circle(temp, color, (self.radius, self.radius), self.radius)
+        temp = _get_particle_surf(self.radius)
+        temp.fill((0, 0, 0, 0))  # clear
+        pygame.draw.circle(temp, color, (int(self.radius), int(self.radius)), int(self.radius))
         surface.blit(temp, (self.x - self.radius, self.y - self.radius))
 
 

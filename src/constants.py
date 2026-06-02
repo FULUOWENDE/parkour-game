@@ -108,7 +108,31 @@ SIGN_ARROW = (255, 255, 200)
 # Overhead obstacle collision constant
 OVERHEAD_BOTTOM = GROUND_Y - 42  # between standing top (388) and sliding top (420)
 
+# ── Item / Power-up ────────────────────────────────────────────
+ITEM_SPAWN_CHANCE = 0.06        # base 6% chance per obstacle spawn
+ITEM_SPAWN_CHANCE_MAX = 0.12    # 12% max at high score
+SHIELD_DURATION = 300           # 5 sec at 60 FPS (absorbs 1 hit)
+SPEED_SLOW_FACTOR = 0.55        # reduce map speed to 55%
+SPEED_SLOW_DURATION = 180       # 3 sec at 60 FPS
+
+# ── Weather ────────────────────────────────────────────────────
+WEATHER_SUNNY = "sunny"
+WEATHER_CLOUDY = "cloudy"
+WEATHER_RAINY = "rainy"
+WEATHER_CLOUDY_SCORE = 800
+WEATHER_RAINY_SCORE = 2000
+
+SKY_SUNNY = (135, 206, 235)
+SKY_CLOUDY = (150, 160, 175)
+SKY_RAINY = (70, 80, 95)
+
+RAIN_COLOR = (160, 190, 220, 180)
+RAIN_OVERLAY_COLOR = (35, 40, 50, 115)
+
+# ── HUD / UI Colors ────────────────────────────────────────────
 HUD_BG = (0, 0, 0, 140)
 TEXT_LIGHT = (240, 240, 240)
 TEXT_ACCENT = (255, 200, 50)
 TEXT_RED = (255, 60, 60)
+TEXT_SHIELD = (255, 215, 0)
+TEXT_SLOW = (100, 200, 255)

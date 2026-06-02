@@ -10,11 +10,15 @@ from src.constants import (
     HUD_BG,
     PLAYER_MAX_JUMPS,
     PLAYING,
+    SHIELD_DURATION,
     SPEED_CAP,
+    SPEED_SLOW_DURATION,
     START,
     TEXT_ACCENT,
     TEXT_LIGHT,
     TEXT_RED,
+    TEXT_SHIELD,
+    TEXT_SLOW,
     TITLE,
     WIDTH,
 )
@@ -44,6 +48,9 @@ class UI:
         self.font_xl = _get_font(40, bold=True)
         self.font_title = _get_font(56, bold=True)
         self.high_score = self._load_high_score()
+        # pre-rendered surfaces for start/game-over screens
+        self._start_prompt_surf = None
+        self._restart_prompt_surf = None
 
     def _load_high_score(self):
         try:
@@ -71,7 +78,15 @@ class UI:
     # ── HUD ────────────────────────────────────────────────────────
     def draw_hud(self, surface, score, speed, player):
         # Score background
-        hud_bg = pygame.Surface((200, 56), pygame.SRCALPHA)
+        hud_w = 200
+        hud_h = 56
+        # add extra height for status indicators when effects are active
+        extra_h = 0
+        if player.shield_timer > 0:
+            extra_h += 18
+        if player.slow_timer > 0:
+            extra_h += 18
+        hud_bg = pygame.Surface((hud_w, hud_h + extra_h), pygame.SRCALPHA)
         pygame.draw.rect(hud_bg, HUD_BG, hud_bg.get_rect(), border_radius=6)
         surface.blit(hud_bg, (12, 10))
 
@@ -82,6 +97,24 @@ class UI:
         # High score
         best_text = self.font_sm.render(f"最高  {self.high_score:06d}", True, (200, 200, 200))
         surface.blit(best_text, (22, 38))
+
+        # Status indicators
+        status_y = 70
+        if player.shield_timer > 0:
+            secs = player.shield_timer / 60.0
+            shield_label = self.font_sm.render(f"🛡 护盾 {secs:.1f}s", True, TEXT_SHIELD)
+            shield_bg = pygame.Surface((shield_label.get_width() + 12, 16), pygame.SRCALPHA)
+            pygame.draw.rect(shield_bg, HUD_BG, shield_bg.get_rect(), border_radius=4)
+            surface.blit(shield_bg, (12, status_y))
+            surface.blit(shield_label, (18, status_y + 1))
+            status_y += 18
+        if player.slow_timer > 0:
+            secs = player.slow_timer / 60.0
+            slow_label = self.font_sm.render(f"❄ 减速 {secs:.1f}s", True, TEXT_SLOW)
+            slow_bg = pygame.Surface((slow_label.get_width() + 12, 16), pygame.SRCALPHA)
+            pygame.draw.rect(slow_bg, HUD_BG, slow_bg.get_rect(), border_radius=4)
+            surface.blit(slow_bg, (12, status_y))
+            surface.blit(slow_label, (18, status_y + 1))
 
         # Speed bar background
         bar_x = WIDTH - 136
@@ -158,13 +191,15 @@ class UI:
         surface.blit(ctrl2, (WIDTH // 2 - cw2 // 2, cy + 68))
         surface.blit(ctrl3, (WIDTH // 2 - cw3 // 2, cy + 98))
 
-        # Pulsing prompt
+        # Pulsing prompt (pre-render text, apply alpha per-frame)
+        if self._start_prompt_surf is None:
+            prompt = self.font_lg.render("按空格键 或 点击开始", True, TEXT_ACCENT)
+            self._start_prompt_surf = pygame.Surface(prompt.get_size(), pygame.SRCALPHA)
+            self._start_prompt_surf.blit(prompt, (0, 0))
         pulse = 0.6 + 0.4 * math.sin(frame * 0.06)
-        prompt = self.font_lg.render("按空格键 或 点击开始", True, TEXT_ACCENT)
-        prompt_surf = pygame.Surface(prompt.get_size(), pygame.SRCALPHA)
-        prompt_surf.blit(prompt, (0, 0))
-        prompt_surf.set_alpha(int(pulse * 255))
-        surface.blit(prompt_surf, (WIDTH // 2 - prompt.get_width() // 2, cy + 140))
+        prompt_copy = self._start_prompt_surf.copy()
+        prompt_copy.set_alpha(int(pulse * 255))
+        surface.blit(prompt_copy, (WIDTH // 2 - prompt_copy.get_width() // 2, cy + 140))
 
         if self.high_score > 0:
             hs_text = self.font_sm.render(f"历史最高分：{self.high_score}", True, (200, 200, 200))
@@ -199,11 +234,13 @@ class UI:
             bw, bh = best_text.get_size()
             surface.blit(best_text, (WIDTH // 2 - bw // 2, cy + 62))
 
-        # Pulsing restart
+        # Pulsing restart (pre-render text, apply alpha per-frame)
+        if self._restart_prompt_surf is None:
+            restart = self.font_lg.render("按空格键重新开始", True, TEXT_LIGHT)
+            self._restart_prompt_surf = pygame.Surface(restart.get_size(), pygame.SRCALPHA)
+            self._restart_prompt_surf.blit(restart, (0, 0))
         pulse = 0.6 + 0.4 * math.sin(frame * 0.06)
-        restart = self.font_lg.render("按空格键重新开始", True, TEXT_LIGHT)
-        restart_surf = pygame.Surface(restart.get_size(), pygame.SRCALPHA)
-        restart_surf.blit(restart, (0, 0))
-        restart_surf.set_alpha(int(pulse * 255))
-        rsw, rsh = restart_surf.get_size()
-        surface.blit(restart_surf, (WIDTH // 2 - rsw // 2, cy + 110))
+        restart_copy = self._restart_prompt_surf.copy()
+        restart_copy.set_alpha(int(pulse * 255))
+        rsw, rsh = restart_copy.get_size()
+        surface.blit(restart_copy, (WIDTH // 2 - rsw // 2, cy + 110))

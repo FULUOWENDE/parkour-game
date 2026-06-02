@@ -16,7 +16,13 @@ from src.constants import (
     SPAWN_GAP_DECAY,
     SPEED_CAP,
     SPEED_RAMP,
+    SPEED_SLOW_FACTOR,
     START,
+    WEATHER_CLOUDY,
+    WEATHER_CLOUDY_SCORE,
+    WEATHER_RAINY,
+    WEATHER_RAINY_SCORE,
+    WEATHER_SUNNY,
     WIDTH,
 )
 from src.obstacles import obstacle_factory
@@ -35,6 +41,8 @@ class Game:
         self.frame = 0
         self.ground_offset = 0
         self.spawn_timer = 0
+        self.speed_multiplier = 1.0  # modified by SpeedBun item
+        self.weather = WEATHER_SUNNY
 
         self.background = Background()
         self.player = Player()
@@ -43,6 +51,10 @@ class Game:
         self.particles = []
 
         self.running = True
+
+    @property
+    def effective_speed(self):
+        return self.speed * self.speed_multiplier
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -77,6 +89,8 @@ class Game:
         self.frame = 0
         self.ground_offset = 0
         self.spawn_timer = 0
+        self.speed_multiplier = 1.0
+        self.weather = WEATHER_SUNNY
         self.obstacles = []
         self.particles = []
         self.player = Player()
@@ -89,63 +103,93 @@ class Game:
                 [(255, 60, 60), (255, 140, 30), (255, 255, 255), (255, 200, 50), (255, 182, 182)],
             )
         )
-        new_record = self.ui.check_high_score(self.score)
+        self.ui.check_high_score(self.score)
 
     def update(self):
         if self.state != PLAYING:
             return
 
         self.frame += 1
-        self.score += self.speed * SCORE_RATE
+        self.score += self.effective_speed * SCORE_RATE
 
         # speed ramp
         self.speed = min(BASE_SPEED + math.floor(self.score / SPEED_RAMP) * 0.5, SPEED_CAP)
 
-        self.ground_offset += self.speed
+        # reset speed multiplier when slow timer expires
+        if self.player.slow_timer <= 0 and self.speed_multiplier < 1.0:
+            self.speed_multiplier = 1.0
+
+        self.ground_offset += self.effective_speed
+
+        # weather transition
+        if self.score < WEATHER_CLOUDY_SCORE:
+            self.weather = WEATHER_SUNNY
+        elif self.score < WEATHER_RAINY_SCORE:
+            self.weather = WEATHER_CLOUDY
+        else:
+            self.weather = WEATHER_RAINY
 
         # spawn obstacles
         self.spawn_timer += 1
         spawn_gap = max(MIN_SPAWN_GAP, BASE_SPAWN_GAP - math.floor(self.score / SPAWN_GAP_DECAY) * 5)
+        # slightly faster spawn when rainy for raindrops
+        if self.weather == WEATHER_RAINY:
+            spawn_gap = max(MIN_SPAWN_GAP - 8, spawn_gap - 5)
         if self.spawn_timer >= spawn_gap + random.random() * 28:
-            self.obstacles.append(obstacle_factory(self.score))
+            self.obstacles.append(obstacle_factory(self.score, self.weather))
             self.spawn_timer = 0
 
         # update obstacles
         for o in self.obstacles:
-            o.update(self.speed)
+            o.update(self.effective_speed)
         self.obstacles = [o for o in self.obstacles if not o.is_offscreen()]
 
         # update player
-        self.player.update(self.speed, BASE_SPEED)
+        self.player.update(self.effective_speed, BASE_SPEED)
 
-        # collision
+        # collision detection
         for o in self.obstacles:
             if check_collision(self.player, o):
-                self.kill_player()
-                return
+                if o.is_item:
+                    # pickup item — apply its effect
+                    o.apply_effect(self)
+                    o.scored = True  # mark for removal
+                elif self.player.shield_timer > 0:
+                    # shield absorbs hit — consume shield, remove obstacle
+                    self.player.shield_timer = 0
+                    self.particles.extend(
+                        spawn_burst(o.x + o.w // 2, o.y + o.h // 2, 12,
+                                    [(255, 215, 0), (255, 255, 200), (255, 180, 0)])
+                    )
+                    o.scored = True  # mark obstacle for removal
+                else:
+                    self.kill_player()
+                    return
+
+        # remove scored obstacles (items and shield-destroyed obstacles)
+        self.obstacles = [o for o in self.obstacles if not o.scored]
 
         # particles
         self.particles = update_particles(self.particles)
 
     def draw(self):
-        self.screen.fill((135, 206, 235))
-
-        self.background.draw(self.screen, self.ground_offset)
+        # sky color based on weather
+        self.background.draw(self.screen, self.ground_offset, self.weather, self.frame)
 
         # obstacles
         for o in self.obstacles:
-            o.draw(self.screen)
+            o.draw(self.screen, self.frame)
 
         # player
         if self.state != DEAD:
-            self.player.draw(self.screen)
+            self.player.draw(self.screen, self.frame)
 
         # particles
         draw_particles(self.screen, self.particles)
 
         # UI overlays
         if self.state == PLAYING:
-            self.ui.draw_hud(self.screen, self.score, self.speed, self.player)
+            self.ui.draw_hud(self.screen, self.score, self.speed * self.speed_multiplier, self.player)
         elif self.state == START:
             self.ui.draw_start_screen(self.screen, self.frame)
         elif self.state == DEAD:

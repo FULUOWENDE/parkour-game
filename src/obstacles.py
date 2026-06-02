@@ -29,15 +29,21 @@ from src.constants import (
     CONE_SHADOW,
     CONE_WHITE,
     GROUND_Y,
+    ITEM_SPAWN_CHANCE,
+    ITEM_SPAWN_CHANCE_MAX,
     MIN_SPAWN_GAP,
     OUTLINE,
     OVERHEAD_BOTTOM,
     PLAYER_SKIN,
+    RAIN_COLOR,
     SHADOW,
+    SHIELD_DURATION,
     SIGN_ARROW,
     SIGN_BOARD,
     SIGN_POLE,
     SIGN_TEXT,
+    SPEED_SLOW_DURATION,
+    SPEED_SLOW_FACTOR,
     TAPE_YELLOW,
     TRASH_CAN,
     TRASH_HIGHLIGHT,
@@ -50,6 +56,7 @@ from src.constants import (
     TREE_TRUNK,
     TREE_TRUNK_DARK,
     TREE_TRUNK_LIGHT,
+    WEATHER_RAINY,
     WIDTH,
 )
 from src.utils import (
@@ -73,6 +80,11 @@ def _get_obs_font(size):
     return _FONT_CACHE[size]
 
 
+# ── SignPost / Banner text pools ───────────────────────────────
+SIGN_TEXTS = ["教学楼", "食堂", "图书馆", "宿舍楼", "实验楼"]
+BANNER_TEXTS = ["四六级加油", "早八不迟到", "社团招新"]
+
+
 # ── Base Obstacle ───────────────────────────────────────────────
 class Obstacle:
     def __init__(self, x, y, w, h):
@@ -82,6 +94,7 @@ class Obstacle:
         self.h = h
         self.scored = False
         self.overhead = False
+        self.is_item = False  # True for collectible power-ups
 
     def update(self, speed):
         self.x -= speed
@@ -89,8 +102,12 @@ class Obstacle:
     def is_offscreen(self):
         return self.x + self.w < -50
 
-    def draw(self, surface):
+    def draw(self, surface, frame=0):
         raise NotImplementedError
+
+    def apply_effect(self, game):
+        """Override in item subclasses to apply effects when picked up."""
+        pass
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -101,15 +118,17 @@ class Obstacle:
 class TrashCan(Obstacle):
     def __init__(self, x=0):
         super().__init__(x, GROUND_Y - 40, 34, 40)
+        # pre-render shadow
+        w = self.w
+        self._shadow = pygame.Surface((w + 8, 8), pygame.SRCALPHA)
+        pygame.draw.ellipse(self._shadow, SHADOW, self._shadow.get_rect())
 
-    def draw(self, surface):
+    def draw(self, surface, frame=0):
         x, y = self.x, self.y
         w, h = self.w, self.h
 
         # drop shadow
-        shadow_surf = pygame.Surface((w + 8, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow_surf, SHADOW, shadow_surf.get_rect())
-        surface.blit(shadow_surf, (x - 4, GROUND_Y - 4))
+        surface.blit(self._shadow, (x - 4, GROUND_Y - 4))
 
         # body — cylindrical with gradient
         for i in range(w):
@@ -153,19 +172,21 @@ class TrashCan(Obstacle):
 class SignPost(Obstacle):
     def __init__(self, x=0):
         super().__init__(x, GROUND_Y - 72, 30, 72)
-        # pre-render text
+        # pre-render text with random destination
         font = _get_obs_font(12)
-        self._text = font.render("教学楼", True, SIGN_TEXT)
+        sign_text = random.choice(SIGN_TEXTS)
+        self._text = font.render(sign_text, True, SIGN_TEXT)
         self._arrow = font.render("→", True, SIGN_ARROW)
+        # pre-render shadow
+        self._shadow = pygame.Surface((12, 6), pygame.SRCALPHA)
+        pygame.draw.ellipse(self._shadow, SHADOW, self._shadow.get_rect())
 
-    def draw(self, surface):
+    def draw(self, surface, frame=0):
         x, y = self.x, self.y
         w, h = self.w, self.h
 
         # shadow
-        shadow_surf = pygame.Surface((12, 6), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow_surf, SHADOW, shadow_surf.get_rect())
-        surface.blit(shadow_surf, (x + w // 2 - 6, GROUND_Y - 3))
+        surface.blit(self._shadow, (x + w // 2 - 6, GROUND_Y - 3))
 
         # pole — metallic with highlight
         pole_w = 5
@@ -199,14 +220,18 @@ class SignPost(Obstacle):
 class TapeBarrier(Obstacle):
     def __init__(self, x=0):
         super().__init__(x, GROUND_Y - 38, 80, 38)
+        # pre-render shadow
+        self._shadow = pygame.Surface((self.w, 8), pygame.SRCALPHA)
+        pygame.draw.ellipse(self._shadow, SHADOW, self._shadow.get_rect())
+        # pre-render single stripe tile
+        self._stripe = pygame.Surface((6, 4), pygame.SRCALPHA)
+        pygame.draw.line(self._stripe, (180, 80, 0, 180), (0, 0), (6, 4), 2)
 
-    def draw(self, surface):
+    def draw(self, surface, frame=0):
         x, y = self.x, self.y
 
         # shadow
-        shadow_surf = pygame.Surface((self.w, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow_surf, SHADOW, shadow_surf.get_rect())
-        surface.blit(shadow_surf, (x, GROUND_Y - 4))
+        surface.blit(self._shadow, (x, GROUND_Y - 4))
 
         # left cone
         self._draw_cone(surface, x + 6, y + 8)
@@ -221,9 +246,7 @@ class TapeBarrier(Obstacle):
         pygame.draw.line(surface, TAPE_YELLOW, (x + 18, tape_y), (x + 62, tape_y), 4)
         # diagonal stripe pattern on tape
         for sx in range(int(x + 20), int(x + 60), 8):
-            stripe = pygame.Surface((6, 4), pygame.SRCALPHA)
-            pygame.draw.line(stripe, (180, 80, 0, 180), (0, 0), (6, 4), 2)
-            surface.blit(stripe, (sx, tape_y - 2))
+            surface.blit(self._stripe, (sx, tape_y - 2))
 
     def _draw_cone(self, surface, cx, top_y):
         cone_w = 16
@@ -271,15 +294,25 @@ class TapeBarrier(Obstacle):
 class CartHandle(Obstacle):
     def __init__(self, x=0):
         super().__init__(x, GROUND_Y - 58, 56, 24)
+        # pre-render shadow
+        self._shadow = pygame.Surface((self.w, 8), pygame.SRCALPHA)
+        pygame.draw.ellipse(self._shadow, SHADOW, self._shadow.get_rect())
+        # pre-render steam animation frames
+        self._steam_frames = []
+        for i in range(8):
+            steam_surf = pygame.Surface((16, 14), pygame.SRCALPHA)
+            scale = 0.6 + 0.4 * math.sin(i * math.pi / 4)
+            for sx, sy, sr in [(4, 10, 4), (12, 6, 3), (8, 2, 3)]:
+                r = max(1, int(sr * scale))
+                pygame.draw.circle(steam_surf, (255, 255, 255, 70), (sx, sy), r)
+            self._steam_frames.append(steam_surf)
 
-    def draw(self, surface):
+    def draw(self, surface, frame=0):
         x, y = self.x, self.y
         w, h = self.w, self.h
 
-        # shadow
-        shadow_surf = pygame.Surface((w, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow_surf, SHADOW, shadow_surf.get_rect())
-        surface.blit(shadow_surf, (x, GROUND_Y - 4))
+        # shadow (pre-rendered)
+        surface.blit(self._shadow, (x, GROUND_Y - 4))
 
         # cart body (below handle)
         body_rect = pygame.Rect(x + 6, GROUND_Y - 24, w - 12, 24)
@@ -302,26 +335,25 @@ class CartHandle(Obstacle):
         bar_hl = pygame.Rect(x + 2, y + 3, w - 4, 3)
         pygame.draw.rect(surface, (220, 225, 235), bar_hl, border_radius=2)
 
-        # steam wisps
-        steam_surf = pygame.Surface((16, 14), pygame.SRCALPHA)
-        for sx, sy, sr in [(4, 10, 4), (12, 6, 3), (8, 2, 3)]:
-            pygame.draw.circle(steam_surf, (255, 255, 255, 70), (sx, sy), sr)
-        surface.blit(steam_surf, (x + w // 2 - 8, y - 12))
+        # steam animation — cycle through pre-rendered frames
+        steam_idx = (frame // 6) % 8
+        surface.blit(self._steam_frames[steam_idx], (x + w // 2 - 8, y - 12))
 
 
 # ── SpeedBump (减速带) ─────────────────────────────────────────
 class SpeedBump(Obstacle):
     def __init__(self, x=0):
         super().__init__(x, GROUND_Y - 16, 60, 16)
+        # pre-render shadow
+        self._shadow = pygame.Surface((self.w + 6, 8), pygame.SRCALPHA)
+        pygame.draw.ellipse(self._shadow, SHADOW, self._shadow.get_rect())
 
-    def draw(self, surface):
+    def draw(self, surface, frame=0):
         x, y = self.x, self.y
         w, h = self.w, self.h
 
-        # shadow
-        shadow_surf = pygame.Surface((w + 6, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow_surf, SHADOW, shadow_surf.get_rect())
-        surface.blit(shadow_surf, (x - 3, GROUND_Y - 4))
+        # shadow (pre-rendered)
+        surface.blit(self._shadow, (x - 3, GROUND_Y - 4))
 
         # bump body — rounded with 3D shading
         bump_rect = pygame.Rect(x, y, w, h)
@@ -352,15 +384,44 @@ class SpeedBump(Obstacle):
 class ElectricBike(Obstacle):
     def __init__(self, x=0):
         super().__init__(x, GROUND_Y - 60, 48, 32)
+        # pre-render shadow
+        self._shadow = pygame.Surface((self.w + 4, 10), pygame.SRCALPHA)
+        pygame.draw.ellipse(self._shadow, SHADOW, self._shadow.get_rect())
+        # pre-render random decoration (school bag or food delivery bag)
+        self._decoration = self._render_decoration()
 
-    def draw(self, surface):
+    def _render_decoration(self):
+        """Pre-render a school bag or food delivery bag on the back seat."""
+        surf = pygame.Surface((16, 14), pygame.SRCALPHA)
+        if random.random() < 0.5:
+            # School bag — rectangular backpack
+            bag_rect = pygame.Rect(2, 2, 12, 10)
+            pygame.draw.rect(surf, (30, 40, 80), bag_rect, border_radius=2)
+            pygame.draw.rect(surf, OUTLINE, bag_rect, 1, border_radius=2)
+            # bag straps
+            pygame.draw.line(surf, (20, 30, 60), (4, 2), (4, 0), 2)
+            pygame.draw.line(surf, (20, 30, 60), (10, 2), (10, 0), 2)
+            # small zipper highlight
+            pygame.draw.line(surf, (80, 90, 130), (4, 4), (12, 4), 1)
+        else:
+            # Food delivery bag — rectangular thermal bag
+            bag_rect = pygame.Rect(2, 2, 12, 10)
+            pygame.draw.rect(surf, (220, 130, 40), bag_rect, border_radius=2)
+            pygame.draw.rect(surf, OUTLINE, bag_rect, 1, border_radius=2)
+            # "外卖" label dots (simplified)
+            pygame.draw.circle(surf, (255, 255, 255), (8, 5), 2)
+            pygame.draw.circle(surf, (255, 255, 255), (8, 9), 2)
+            # bag top tie
+            pygame.draw.line(surf, (180, 100, 30), (6, 2), (6, 0), 2)
+            pygame.draw.line(surf, (180, 100, 30), (10, 2), (10, 0), 2)
+        return surf
+
+    def draw(self, surface, frame=0):
         x, y = self.x, self.y
         w, h = self.w, self.h
 
-        # shadow
-        shadow_surf = pygame.Surface((w + 4, 10), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow_surf, SHADOW, shadow_surf.get_rect())
-        surface.blit(shadow_surf, (x - 2, GROUND_Y - 5))
+        # shadow (pre-rendered)
+        surface.blit(self._shadow, (x - 2, GROUND_Y - 5))
 
         # wheels
         for wx, wy in [(x + 9, GROUND_Y - 7), (x + w - 9, GROUND_Y - 7)]:
@@ -387,6 +448,9 @@ class ElectricBike(Obstacle):
         # seat
         seat_rect = pygame.Rect(x + 12, y + 6, 14, 8)
         draw_rounded_rect(surface, seat_rect, (30, 30, 35), 3, outline=1)
+
+        # decoration on back seat (school bag / food delivery bag)
+        surface.blit(self._decoration, (x + 24, y - 6))
 
         # headlight
         hl_rect = pygame.Rect(x + w - 5, y + 10, 6, 6)
@@ -430,11 +494,14 @@ class TreeBranch(Obstacle):
         super().__init__(x, OVERHEAD_BOTTOM - 28, 72, 28)
         self.overhead = True
 
-    def draw(self, surface):
+    def draw(self, surface, frame=0):
         x, y = self.x, self.y  # y = OVERHEAD_BOTTOM - 28
         w = self.w
         cx = x + w // 2
         bot = OVERHEAD_BOTTOM
+
+        # leaf sway animation (sin wave based on frame)
+        sway = math.sin(frame * 0.08) * 3
 
         # main trunk (extends up and right)
         trunk_top = 80
@@ -458,7 +525,7 @@ class TreeBranch(Obstacle):
         # trunk outline
         pygame.draw.polygon(surface, OUTLINE, trunk_pts, 1)
 
-        # foliage clusters — layered circles for depth
+        # foliage clusters — layered circles for depth, with sway offset
         foliage_clusters = [
             # (cx_offset, cy_offset, radius, color)
             (cx - 18, bot - 50, 22, TREE_LEAF_DARK),
@@ -472,14 +539,18 @@ class TreeBranch(Obstacle):
             (cx + 22, bot - 25, 10, TREE_LEAF_DARK),
         ]
         for fx, fy, fr, fc in foliage_clusters:
-            pygame.draw.circle(surface, fc, (int(fx), int(fy)), fr)
+            fx_swayed = fx + sway
+            pygame.draw.circle(surface, fc, (int(fx_swayed), int(fy)), fr)
             # mini highlight dot on each cluster
-            pygame.draw.circle(surface, TREE_LEAF_LIGHT, (int(fx) - 3, int(fy) - 3), max(2, fr // 5))
+            hl_x = int(fx_swayed) - 3
+            hl_y = int(fy) - 3
+            pygame.draw.circle(surface, TREE_LEAF_LIGHT, (hl_x, hl_y), max(2, fr // 5))
 
-        # small dangling branches at bottom
+        # small dangling branches at bottom (also sway)
         for dbx, dby in [(cx - 10, bot - 2), (cx - 2, bot + 2), (cx + 10, bot - 4)]:
-            pygame.draw.line(surface, TREE_TRUNK, (dbx, dby), (dbx + 3, dby + 8), 2)
-            pygame.draw.circle(surface, TREE_LEAF_MID, (dbx + 3, dby + 8), 3)
+            dbx_s = dbx + sway * 1.2
+            pygame.draw.line(surface, TREE_TRUNK, (dbx_s, dby), (dbx_s + 3, dby + 8), 2)
+            pygame.draw.circle(surface, TREE_LEAF_MID, (int(dbx_s + 3), dby + 8), 3)
 
         # trunk bark texture lines
         for tx in range(int(cx) - 4, int(cx) + 12, 6):
@@ -491,14 +562,16 @@ class CampusBanner(Obstacle):
     def __init__(self, x=0):
         super().__init__(x, OVERHEAD_BOTTOM - 30, 100, 30)
         self.overhead = True
-        self._banner_texts = [
-            _get_obs_font(13).render("热烈欢迎", True, BANNER_TEXT),
-            _get_obs_font(13).render("新同学", True, BANNER_TEXT),
-        ]
+        # random banner text
+        banner_text = random.choice(BANNER_TEXTS)
+        self._banner_text = _get_obs_font(14).render(banner_text, True, BANNER_TEXT)
 
-    def draw(self, surface):
+    def draw(self, surface, frame=0):
         x, y = self.x, self.y
         w, h = self.w, self.h
+
+        # fabric wave: subtle y offset based on position and frame
+        wave = math.sin((x + frame * 2) * 0.03) * 2
 
         # poles
         pole_w = 6
@@ -513,29 +586,34 @@ class CampusBanner(Obstacle):
             pygame.draw.ellipse(surface, BANNER_POLE, cap_rect)
             pygame.draw.ellipse(surface, OUTLINE, cap_rect, 1)
 
-        # red banner fabric
-        banner_top = y + 2
+        # red banner fabric with wave offset
+        banner_top = y + 2 + wave
         banner_h = h - 4
-        banner_rect = pygame.Rect(x + 12, banner_top, w - 24, banner_h)
+        banner_rect = pygame.Rect(x + 12, int(banner_top), w - 24, banner_h)
         pygame.draw.rect(surface, BANNER_RED, banner_rect)
         # fabric folds (vertical darker lines)
         for fx in range(int(x + 24), int(x + w - 24), 14):
-            pygame.draw.line(surface, BANNER_RED_DARK, (fx, banner_top + 2), (fx, banner_top + banner_h - 2), 1)
+            fy_start = int(banner_top + 2)
+            fy_end = int(banner_top + banner_h - 2)
+            pygame.draw.line(surface, BANNER_RED_DARK, (fx, fy_start), (fx, fy_end), 1)
         # top edge highlight
-        pygame.draw.rect(surface, BANNER_RED_LIGHT, (x + 12, banner_top, w - 24, 3))
+        pygame.draw.rect(surface, BANNER_RED_LIGHT, (x + 12, int(banner_top), w - 24, 3))
+        # bottom edge wave (extra fabric droop)
+        bot_droop = 3 + math.sin((x + frame * 2 + 8) * 0.03) * 1
+        droop_rect = pygame.Rect(x + 12, int(banner_top + banner_h - 3), w - 24, int(bot_droop))
+        pygame.draw.rect(surface, BANNER_RED_DARK, droop_rect)
         # outline
         pygame.draw.rect(surface, OUTLINE, banner_rect, 1)
 
         # rope knots at pole connections
         for kx in [x + 8, x + w - 14]:
-            pygame.draw.rect(surface, (200, 180, 100), (kx - 2, banner_top + 2, 5, 6))
-            pygame.draw.rect(surface, OUTLINE, (kx - 2, banner_top + 2, 5, 6), 1)
+            pygame.draw.rect(surface, (200, 180, 100), (kx - 2, int(banner_top) + 2, 5, 6))
+            pygame.draw.rect(surface, OUTLINE, (kx - 2, int(banner_top) + 2, 5, 6), 1)
 
-        # text on banner
-        tx = int(x + 18)
-        for text_surf in self._banner_texts:
-            surface.blit(text_surf, (tx, int(banner_top + 4)))
-            tx += text_surf.get_width() + 10
+        # text on banner (centered)
+        tw = self._banner_text.get_width()
+        tx = int(x + 12 + (w - 24 - tw) / 2)
+        surface.blit(self._banner_text, (tx, int(banner_top + 5)))
 
 
 # ── BarrierGate (校园道闸杆) ────────────────────────────────────
@@ -544,7 +622,7 @@ class BarrierGate(Obstacle):
         super().__init__(x, OVERHEAD_BOTTOM - 26, 84, 26)
         self.overhead = True
 
-    def draw(self, surface):
+    def draw(self, surface, frame=0):
         x, y = self.x, self.y
         w, h = self.w, self.h
         arm_y = y + 10
@@ -583,6 +661,140 @@ class BarrierGate(Obstacle):
 
 
 # ═══════════════════════════════════════════════════════════════════
+#  POWER-UP ITEMS  (collectible, is_item=True)
+# ═══════════════════════════════════════════════════════════════════
+
+# ── BookShield (免撞书本 — 护盾 buff) ──────────────────────────
+class BookShield(Obstacle):
+    def __init__(self, x=0):
+        super().__init__(x, GROUND_Y - 30, 26, 22)
+        self.is_item = True
+
+    def apply_effect(self, game):
+        game.player.shield_timer = SHIELD_DURATION
+
+    def draw(self, surface, frame=0):
+        x, y = self.x, self.y
+        w, h = self.w, self.h
+
+        # floating bobbing effect
+        bob = math.sin(frame * 0.06) * 3
+        by = y + bob
+
+        # glow halo
+        glow_surf = pygame.Surface((w + 8, h + 8), pygame.SRCALPHA)
+        pulse = 0.4 + 0.2 * math.sin(frame * 0.1)
+        alpha = int(pulse * 120)
+        pygame.draw.ellipse(glow_surf, (255, 215, 0, alpha), glow_surf.get_rect())
+        surface.blit(glow_surf, (x - 4, by - 4))
+
+        # book body
+        book_rect = pygame.Rect(x + 2, by + 2, w - 4, h - 4)
+        pygame.draw.rect(surface, (40, 60, 140), book_rect, border_radius=2)
+        pygame.draw.rect(surface, OUTLINE, book_rect, 1, border_radius=2)
+        # spine highlight
+        pygame.draw.rect(surface, (60, 85, 175), (x + 4, by + 3, 3, h - 8), border_radius=1)
+        # pages edge (white lines)
+        for py in range(int(by + 5), int(by + h - 6), 4):
+            pygame.draw.line(surface, (255, 255, 240), (x + 8, py), (x + w - 4, py), 1)
+        # title marks
+        pygame.draw.line(surface, (255, 215, 0), (x + 8, by + 7), (x + 14, by + 7), 1)
+        pygame.draw.line(surface, (255, 215, 0), (x + 8, by + 10), (x + 12, by + 10), 1)
+
+
+# ── SpeedBun (变速包子 — 减速 buff) ────────────────────────────
+class SpeedBun(Obstacle):
+    def __init__(self, x=0):
+        super().__init__(x, GROUND_Y - 28, 22, 22)
+        self.is_item = True
+
+    def apply_effect(self, game):
+        game.player.slow_timer = SPEED_SLOW_DURATION
+        game.speed_multiplier = SPEED_SLOW_FACTOR
+
+    def draw(self, surface, frame=0):
+        x, y = self.x, self.y
+        w, h = self.w, self.h
+
+        # floating bobbing
+        bob = math.sin(frame * 0.06 + 1.5) * 3
+        by = y + bob
+
+        # blue glow
+        glow_surf = pygame.Surface((w + 8, h + 8), pygame.SRCALPHA)
+        pulse = 0.4 + 0.2 * math.sin(frame * 0.1 + 1.5)
+        alpha = int(pulse * 120)
+        pygame.draw.ellipse(glow_surf, (100, 200, 255, alpha), glow_surf.get_rect())
+        surface.blit(glow_surf, (x - 4, by - 4))
+
+        # bun body (white oval)
+        bun_rect = pygame.Rect(x + 2, by + 4, w - 4, h - 6)
+        pygame.draw.ellipse(surface, (255, 245, 230), bun_rect)
+        pygame.draw.ellipse(surface, OUTLINE, bun_rect, 1)
+        # bun top highlight
+        hl_rect = pygame.Rect(x + 6, by + 5, w - 14, 6)
+        pygame.draw.ellipse(surface, (255, 252, 245), hl_rect)
+        # bun fold line
+        pygame.draw.line(surface, (220, 210, 190), (x + w // 2, by + 6), (x + w // 2, by + h - 8), 1)
+        # small steam wisps
+        for sx, sy, sr in [(x + w // 2 - 4, by - 2, 2), (x + w // 2 + 3, by - 4, 2)]:
+            steam_alpha = int(80 + 40 * math.sin(frame * 0.15 + sx))
+            steam_a = max(0, min(255, steam_alpha))
+            steam_s = pygame.Surface((sr * 2 + 2, sr * 2 + 2), pygame.SRCALPHA)
+            pygame.draw.circle(steam_s, (255, 255, 255, steam_a), (sr + 1, sr + 1), sr)
+            surface.blit(steam_s, (sx - sr, sy - sr))
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  WEATHER OBSTACLES
+# ═══════════════════════════════════════════════════════════════════
+
+# ── Raindrop (雨滴 — 雨天低空障碍物，下蹲躲避) ──────────────────
+class Raindrop(Obstacle):
+    def __init__(self, x=0):
+        h = random.randint(18, 28)
+        super().__init__(x, OVERHEAD_BOTTOM - h - random.randint(2, 20), 8, h)
+        self.overhead = True  # slide under to dodge
+
+    def update(self, speed):
+        self.x -= speed
+        # raindrops drift downward slowly
+        self.y += 0.8
+
+    def is_offscreen(self):
+        return self.x + self.w < -50 or self.y > OVERHEAD_BOTTOM
+
+    def draw(self, surface, frame=0):
+        x, y = self.x, self.y
+        w, h = self.w, self.h
+
+        # rain streak — teardrop shape
+        # top point
+        streak_pts = [
+            (x + w // 2, y),           # top center
+            (x + w, y + h - 6),        # bottom right
+            (x + w // 2, y + h),       # bottom tip
+            (x, y + h - 6),            # bottom left
+        ]
+        rain_alpha = int(160 + 40 * math.sin(frame * 0.12 + x * 0.1))
+        rain_alpha = max(100, min(255, rain_alpha))
+        rain_color = (*RAIN_COLOR[:3], rain_alpha)
+
+        drop_surf = pygame.Surface((w + 2, h + 2), pygame.SRCALPHA)
+        shifted_pts = [(px - x + 1, py - y + 1) for px, py in streak_pts]
+        pygame.draw.polygon(drop_surf, rain_color, shifted_pts)
+        # highlight streak
+        hl_pts = [
+            (w // 2 + 1, 3),
+            (w - 1, h - 5),
+            (w // 2 + 1, h - 2),
+        ]
+        if len(hl_pts) >= 3:
+            pygame.draw.polygon(drop_surf, (200, 215, 235, min(255, rain_alpha + 30)), hl_pts)
+        surface.blit(drop_surf, (x, y))
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  OBSTACLE TYPE REGISTRY & FACTORY
 # ═══════════════════════════════════════════════════════════════════
 # Indices 0-5: ground obstacles (jump over)
@@ -600,7 +812,25 @@ OBSTACLE_TYPES = [
 ]
 
 
-def obstacle_factory(score):
+def obstacle_factory(score, weather=None):
+    """Create an obstacle or item based on current score and weather.
+
+    Args:
+        score: current game score (affects difficulty pool)
+        weather: current weather string (affects raindrop spawning)
+    """
+    # ── Item spawn chance (scales with score) ──
+    item_chance = ITEM_SPAWN_CHANCE + (score / 5000) * (ITEM_SPAWN_CHANCE_MAX - ITEM_SPAWN_CHANCE)
+    item_chance = min(ITEM_SPAWN_CHANCE_MAX, item_chance)
+    if random.random() < item_chance:
+        ItemClass = random.choice([BookShield, SpeedBun])
+        return ItemClass(WIDTH + 40)
+
+    # ── Weather-based obstacles ──
+    if weather == WEATHER_RAINY and random.random() < 0.15:
+        return Raindrop(WIDTH + random.randint(0, 200))
+
+    # ── Normal obstacle pools ──
     if score < 300:
         # Easy: mostly simple ground obstacles, occasional overhead
         pool = [0, 0, 0, 1, 2, 6]
