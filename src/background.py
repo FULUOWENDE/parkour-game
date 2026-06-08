@@ -19,6 +19,7 @@ from src.constants import (
     WEATHER_CLOUDY,
     WEATHER_RAINY,
     WEATHER_SUNNY,
+    
     WIDTH,
 )
 

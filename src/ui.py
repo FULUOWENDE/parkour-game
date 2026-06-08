@@ -5,6 +5,7 @@ import pygame
 
 from src.constants import (
     DEAD,
+    EBIKE_DURATION,
     HEIGHT,
     HIGHSCORE_FILE,
     HUD_BG,
@@ -15,6 +16,7 @@ from src.constants import (
     SPEED_SLOW_DURATION,
     START,
     TEXT_ACCENT,
+    TEXT_EBIKE,
     TEXT_LIGHT,
     TEXT_RED,
     TEXT_SHIELD,
@@ -86,6 +88,8 @@ class UI:
             extra_h += 18
         if player.slow_timer > 0:
             extra_h += 18
+        if player.ebike_timer > 0:
+            extra_h += 18
         if weather and weather != "sunny":
             extra_h += 18
         hud_bg = pygame.Surface((hud_w, hud_h + extra_h), pygame.SRCALPHA)
@@ -125,6 +129,15 @@ class UI:
             pygame.draw.rect(slow_bg, HUD_BG, slow_bg.get_rect(), border_radius=4)
             surface.blit(slow_bg, (12, status_y))
             surface.blit(slow_label, (18, status_y + 1))
+            status_y += 18
+        if player.ebike_timer > 0:
+            secs = player.ebike_timer / 60.0
+            ebike_label = self.font_sm.render(f"🛵 骑行 {secs:.1f}s", True, TEXT_EBIKE)
+            ebike_bg = pygame.Surface((ebike_label.get_width() + 12, 16), pygame.SRCALPHA)
+            pygame.draw.rect(ebike_bg, HUD_BG, ebike_bg.get_rect(), border_radius=4)
+            surface.blit(ebike_bg, (12, status_y))
+            surface.blit(ebike_label, (18, status_y + 1))
+            status_y += 18
 
         # Speed bar background
         bar_x = WIDTH - 136

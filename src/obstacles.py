@@ -28,6 +28,15 @@ from src.constants import (
     CONE_ORANGE,
     CONE_SHADOW,
     CONE_WHITE,
+    EBIKE_BASKET,
+    EBIKE_DURATION,
+    EBIKE_FENDER,
+    EBIKE_FRAME,
+    EBIKE_HANDLE,
+    EBIKE_HUB,
+    EBIKE_PEDAL,
+    EBIKE_SEAT,
+    EBIKE_TIRE_COLOR,
     GROUND_Y,
     ITEM_SPAWN_CHANCE,
     ITEM_SPAWN_CHANCE_MAX,
@@ -771,6 +780,97 @@ class SpeedBun(Obstacle):
             surface.blit(steam_s, (sx - sr, sy - sr))
 
 
+# ── SharedEBike (共享电动车 — 加速 buff) ──────────────────────
+class SharedEBike(Obstacle):
+    def __init__(self, x=0):
+        super().__init__(x, GROUND_Y - 32, 50, 32)
+        self.is_item = True
+        # pre-render glow base
+        self._glow_base = pygame.Surface((self.w + 14, self.h + 14), pygame.SRCALPHA)
+        for r in range(6, 2, -1):
+            a = 60 // (r - 1)
+            pygame.draw.ellipse(self._glow_base, (255, 180, 30, a), self._glow_base.get_rect(), width=r)
+
+    def apply_effect(self, game):
+        game.player.ebike_timer = EBIKE_DURATION
+
+    def draw(self, surface, frame=0):
+        x, y = self.x, self.y
+        w, h = self.w, self.h
+        cx = x + w // 2
+        bike_y = GROUND_Y
+
+        # floating bobbing
+        bob = math.sin(frame * 0.05 + 2.5) * 4
+        by = y + bob
+
+        # Orange pulsing glow
+        pulse = 0.5 + 0.5 * math.sin(frame * 0.08 + 2.5)
+        glow = self._glow_base.copy()
+        glow.set_alpha(int(100 + pulse * 100))
+        surface.blit(glow, (x - 7, by - 7))
+
+        # ── Shadow ──
+        shadow_rect = pygame.Rect(x - 2, GROUND_Y - 2, w + 4, 6)
+        pygame.draw.ellipse(surface, SHADOW, shadow_rect)
+
+        # ── Wheels ──
+        wheel_r = 8
+        for wx in [x + 10, x + w - 12]:
+            # Tire
+            pygame.draw.circle(surface, OUTLINE, (int(wx), bike_y - wheel_r), wheel_r, 1)
+            pygame.draw.circle(surface, EBIKE_TIRE_COLOR, (int(wx), bike_y - wheel_r), wheel_r - 1)
+            # Hub
+            pygame.draw.circle(surface, EBIKE_HUB, (int(wx), bike_y - wheel_r), 2)
+
+        # ── Frame ──
+        frame_pts = [
+            (x + 10, bike_y - wheel_r),          # rear axle
+            (cx + 1, bike_y - 22),               # seat top
+            (x + w - 12, bike_y - wheel_r),      # front axle
+            (cx + 8, bike_y - 20),               # head tube bottom
+            (cx + 6, bike_y - 28),               # head tube top
+        ]
+        pygame.draw.polygon(surface, EBIKE_FRAME, frame_pts)
+        pygame.draw.polygon(surface, OUTLINE, frame_pts, 1)
+
+        # Frame highlight
+        pygame.draw.line(surface, EBIKE_FENDER,
+                         (x + 12, bike_y - wheel_r - 1),
+                         (cx + 5, bike_y - 24), 1)
+
+        # ── Fenders ──
+        for fwx in [x + 10, x + w - 12]:
+            fender_rect = pygame.Rect(fwx - 6, bike_y - wheel_r - 3, 12, 4)
+            pygame.draw.arc(surface, EBIKE_FENDER, fender_rect, math.pi, 2 * math.pi, 1)
+
+        # ── Chain area ──
+        chain_rect = pygame.Rect(cx - 4, bike_y - 10, 10, 6)
+        pygame.draw.ellipse(surface, EBIKE_PEDAL, chain_rect)
+        pygame.draw.ellipse(surface, OUTLINE, chain_rect, 1)
+
+        # ── Handlebars ──
+        hb_x = cx + 8
+        hb_y = bike_y - 30
+        pygame.draw.line(surface, EBIKE_HANDLE, (hb_x - 2, hb_y), (hb_x + 4, hb_y), 3)
+        pygame.draw.circle(surface, (40, 40, 40), (hb_x - 3, hb_y), 2)
+        pygame.draw.circle(surface, (40, 40, 40), (hb_x + 5, hb_y), 2)
+
+        # ── Basket ──
+        basket_rect = pygame.Rect(x + w - 8, bike_y - 26, 10, 8)
+        draw_rounded_rect(surface, basket_rect, EBIKE_BASKET, 2, outline=1)
+
+        # ── Seat ──
+        seat_rect = pygame.Rect(cx - 4, bike_y - 26, 12, 5)
+        draw_rounded_rect(surface, seat_rect, EBIKE_SEAT, 3, outline=1)
+
+        # ── Brand logo dot (small circle on frame) ──
+        logo_x = int(cx + 2)
+        logo_y = int(bike_y - 18)
+        pygame.draw.circle(surface, (255, 255, 255), (logo_x, logo_y), 2)
+        pygame.draw.circle(surface, OUTLINE, (logo_x, logo_y), 2, 1)
+
+
 # ═══════════════════════════════════════════════════════════════════
 #  WEATHER OBSTACLES
 # ═══════════════════════════════════════════════════════════════════
@@ -850,7 +950,7 @@ def obstacle_factory(score, weather=None, mode=0):
     item_chance = ITEM_SPAWN_CHANCE + (score / 5000) * (ITEM_SPAWN_CHANCE_MAX - ITEM_SPAWN_CHANCE)
     item_chance = min(ITEM_SPAWN_CHANCE_MAX, item_chance)
     if random.random() < item_chance:
-        ItemClass = random.choice([BookShield, SpeedBun])
+        ItemClass = random.choice([BookShield, SpeedBun, SharedEBike])
         return ItemClass(WIDTH + 40)
 
     # ── Weather-based obstacles ──

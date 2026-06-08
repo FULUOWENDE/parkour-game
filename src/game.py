@@ -9,6 +9,7 @@ from src.constants import (
     BASE_SPEED,
     CHAR_LIST,
     DEAD,
+    EBIKE_SPEED_FACTOR,
     HEIGHT,
     MIN_SPAWN_GAP,
     PLAYING,
@@ -33,8 +34,9 @@ from src.utils import check_collision, draw_particles, spawn_burst, update_parti
 
 
 class Game:
-    def __init__(self, screen):
+    def __init__(self, screen, sound_manager=None):
         self.screen = screen
+        self.sound = sound_manager  # SoundManager instance (can be None)
         self.state = START
         self.score = 0
         self.speed = BASE_SPEED
@@ -60,7 +62,10 @@ class Game:
 
     @property
     def effective_speed(self):
-        return self.speed * self.speed_multiplier * self._char_speed_mul
+        boost = self.speed_multiplier
+        if self.player.ebike_timer > 0:
+            boost *= EBIKE_SPEED_FACTOR
+        return self.speed * boost * self._char_speed_mul
 
     def handle_event(self, event):
         """Handle a single pygame event. Returns False if the app should quit."""
@@ -71,11 +76,15 @@ class Game:
             if event.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w):
                 if self.state == PLAYING:
                     self.player.jump(self.particles)
+                    if self.sound:
+                        self.sound.play_jump()
                 elif self.state == START:
                     self._begin_play()
             elif event.key in (pygame.K_DOWN, pygame.K_s):
                 if self.state == PLAYING:
                     self.player.slide()
+                    if self.sound:
+                        self.sound.play_slide()
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.state == START:
@@ -83,8 +92,12 @@ class Game:
             elif self.state == PLAYING:
                 if event.pos[1] < HEIGHT * 0.55:
                     self.player.jump(self.particles)
+                    if self.sound:
+                        self.sound.play_jump()
                 else:
                     self.player.slide()
+                    if self.sound:
+                        self.sound.play_slide()
 
         return True
 
@@ -138,6 +151,8 @@ class Game:
             )
         )
         self.ui.check_high_score(self.score)
+        if self.sound:
+            self.sound.play_death()
 
     def update(self):
         if self.state != PLAYING:
@@ -165,6 +180,12 @@ class Game:
             self.weather = WEATHER_RAINY
         if self.weather != prev_weather:
             self._weather_flash = 60  # 1 sec flash notification
+            if self.sound:
+                if self.weather == WEATHER_RAINY:
+                    self.sound.play_rain_start()
+                    self.sound.switch_bgm("tension")
+                elif self.weather == WEATHER_CLOUDY:
+                    self.sound.switch_bgm("early")
 
         # spawn obstacles
         self.spawn_timer += 1
@@ -203,6 +224,8 @@ class Game:
                     # pickup item — apply its effect + particle burst
                     o.apply_effect(self)
                     o.scored = True  # mark for removal
+                    if self.sound:
+                        self.sound.play_item(type(o).__name__)
                     self.particles.extend(
                         spawn_burst(o.x + o.w // 2, o.y + o.h // 2, 15,
                                     [(255, 255, 255), (255, 255, 200), (255, 200, 50),

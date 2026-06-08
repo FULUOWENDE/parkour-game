@@ -116,6 +116,8 @@ ITEM_SPAWN_CHANCE_MAX = 0.20    # 20% max at high score
 SHIELD_DURATION = 300           # 5 sec at 60 FPS (absorbs 1 hit)
 SPEED_SLOW_FACTOR = 0.55        # reduce map speed to 55%
 SPEED_SLOW_DURATION = 240       # 4 sec at 60 FPS
+EBIKE_SPEED_FACTOR = 1.55       # shared e-bike speed multiplier
+EBIKE_DURATION = 240            # 4 sec at 60 FPS
 
 # ── Weather ────────────────────────────────────────────────────
 WEATHER_SUNNY = "sunny"
@@ -138,6 +140,17 @@ TEXT_ACCENT = (255, 200, 50)
 TEXT_RED = (255, 60, 60)
 TEXT_SHIELD = (255, 215, 0)
 TEXT_SLOW = (100, 200, 255)
+TEXT_EBIKE = (255, 180, 30)
+
+# ── Shared E-Bike Colors ──────────────────────────────────────
+EBIKE_FRAME = (40, 140, 220)    # blue frame (like HelloBike/Hellobike)
+EBIKE_FENDER = (30, 110, 190)
+EBIKE_TIRE_COLOR = (35, 35, 35)
+EBIKE_HUB = (200, 200, 210)
+EBIKE_BASKET = (180, 180, 190)
+EBIKE_SEAT = (30, 30, 35)
+EBIKE_HANDLE = (160, 165, 175)
+EBIKE_PEDAL = (120, 120, 130)
 
 # ═══════════════════════════════════════════════════════════════════
 #  GAME STATE MACHINE

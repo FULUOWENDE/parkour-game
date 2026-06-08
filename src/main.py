@@ -20,6 +20,7 @@ from src.menu import (
     draw_main_menu,
     draw_mode_select,
 )
+from src.sound import SoundManager
 
 
 def main():
@@ -28,7 +29,11 @@ def main():
     pygame.display.set_caption(TITLE)
     clock = pygame.time.Clock()
 
-    game = Game(screen)
+    # ── Sound system ──
+    sound_manager = SoundManager(enabled=True)
+    sound_manager.switch_bgm("menu")
+
+    game = Game(screen, sound_manager=sound_manager)
     game_state = GameState.MAIN_MENU
 
     # ── Menu state variables ──
@@ -50,6 +55,7 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 game.cleanup()
+                sound_manager.cleanup()
                 pygame.quit()
                 sys.exit()
 
@@ -74,6 +80,7 @@ def main():
                                 help_visible = True
                             elif menu_selected_idx == 2:
                                 game.cleanup()
+                                sound_manager.cleanup()
                                 pygame.quit()
                                 sys.exit()
 
@@ -89,6 +96,7 @@ def main():
                                 help_visible = True
                             elif action == "quit":
                                 game.cleanup()
+                                sound_manager.cleanup()
                                 pygame.quit()
                                 sys.exit()
 
@@ -97,6 +105,7 @@ def main():
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         game_state = GameState.MAIN_MENU
+                        sound_manager.switch_bgm("menu")
                     elif event.key == pygame.K_LEFT:
                         selected_char_idx = (selected_char_idx - 1) % len(CHAR_LIST)
                     elif event.key == pygame.K_RIGHT:
@@ -110,6 +119,7 @@ def main():
                         game_state = GameState.SELECT_MODE
                     elif char_back_btn and char_back_btn.handle_click(event.pos) == "back":
                         game_state = GameState.MAIN_MENU
+                        sound_manager.switch_bgm("menu")
                     # Check click on character cards (approximate)
                     if event.pos[1] < 100 or event.pos[1] > 480:
                         pass  # outside card area
@@ -137,11 +147,13 @@ def main():
                     elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                         game.start_game(char_idx=selected_char_idx, mode=selected_mode_idx)
                         game_state = GameState.GAME_RUN
+                        sound_manager.switch_bgm("early")
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if mode_start_btn and mode_start_btn.handle_click(event.pos) == "confirm":
                         game.start_game(char_idx=selected_char_idx, mode=selected_mode_idx)
                         game_state = GameState.GAME_RUN
+                        sound_manager.switch_bgm("early")
                     elif mode_back_btn and mode_back_btn.handle_click(event.pos) == "back":
                         game_state = GameState.SELECT_CHAR
                     # Check click on mode cards
@@ -163,6 +175,7 @@ def main():
             elif game_state == GameState.GAME_RUN:
                 if not game.handle_event(event):
                     game.cleanup()
+                    sound_manager.cleanup()
                     pygame.quit()
                     sys.exit()
 
@@ -178,6 +191,7 @@ def main():
                             # 再来一局 — same char & mode, immediate start
                             game.start_game(char_idx=selected_char_idx, mode=selected_mode_idx, immediate=True)
                             game_state = GameState.GAME_RUN
+                            sound_manager.switch_bgm("early")
                         elif go_selected_btn == 1:
                             # 重新选模式
                             game_state = GameState.SELECT_MODE
@@ -185,6 +199,7 @@ def main():
                             # 返回主菜单
                             game_state = GameState.MAIN_MENU
                             menu_selected_idx = 0
+                            sound_manager.switch_bgm("menu")
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     for i, btn in enumerate(game_over_buttons):
@@ -192,11 +207,13 @@ def main():
                         if action == "replay":
                             game.start_game(char_idx=selected_char_idx, mode=selected_mode_idx, immediate=True)
                             game_state = GameState.GAME_RUN
+                            sound_manager.switch_bgm("early")
                         elif action == "reselect":
                             game_state = GameState.SELECT_MODE
                         elif action == "menu":
                             game_state = GameState.MAIN_MENU
                             menu_selected_idx = 0
+                            sound_manager.switch_bgm("menu")
 
         # ═══════════════════════════════════════════════════════════
         #  RENDERING

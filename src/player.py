@@ -5,6 +5,15 @@ import pygame
 from src.constants import (
     CHAR_LIST,
     DB_JUMP_VEL,
+    EBIKE_BASKET,
+    EBIKE_DURATION,
+    EBIKE_FENDER,
+    EBIKE_FRAME,
+    EBIKE_HANDLE,
+    EBIKE_HUB,
+    EBIKE_PEDAL,
+    EBIKE_SEAT,
+    EBIKE_TIRE_COLOR,
     GRAVITY,
     GROUND_Y,
     JUMP_VEL,
@@ -43,6 +52,7 @@ class Player:
         # item effects
         self.shield_timer = 0   # frames of shield remaining (absorbs 1 hit)
         self.slow_timer = 0     # frames of slow effect remaining
+        self.ebike_timer = 0    # frames of shared e-bike ride remaining
         # pre-allocated surfaces for per-frame use
         self._trail_surf_cache = {}
         self._ring_surf = None
@@ -133,6 +143,8 @@ class Player:
             self.shield_timer -= 1
         if self.slow_timer > 0:
             self.slow_timer -= 1
+        if self.ebike_timer > 0:
+            self.ebike_timer -= 1
 
         # gravity
         self.vy += GRAVITY
@@ -181,7 +193,9 @@ class Player:
         if self._land_squash > 0:
             scale_x = 1.08
 
-        if self.sliding:
+        if self.ebike_timer > 0 and self.jumps == 0 and not self.sliding:
+            self._draw_ebike(surface, x, y, w, h, cx)
+        elif self.sliding:
             self._draw_sliding(surface, x, y, w)
         else:
             self._draw_running(surface, x, y, w, h, cx, scale_x, scale_y)
@@ -232,6 +246,122 @@ class Player:
                 width=2,
             )
         surface.blit(glow, (self.cx - radius, self.cy - radius))
+
+    def _draw_ebike(self, surface, x, y, w, h, cx):
+        """Draw the player riding a shared e-bike."""
+        foot_y = GROUND_Y
+        bike_y = foot_y
+
+        # ── Bike shadow ──
+        shadow_rect = pygame.Rect(x - 4, bike_y - 2, w + 30, 6)
+        pygame.draw.ellipse(surface, (0, 0, 0, 40), shadow_rect)
+
+        # ── Wheels ──
+        wheel_radius = 12
+        front_wx = int(cx + 16)
+        rear_wx = int(cx - 14)
+        wheel_cy = bike_y - wheel_radius
+
+        # Pedaling rotation
+        pedal_angle = self.leg_phase * 1.8  # faster rotation for riding
+
+        for wx in [rear_wx, front_wx]:
+            # Tire
+            pygame.draw.circle(surface, OUTLINE, (wx, wheel_cy), wheel_radius, 2)
+            pygame.draw.circle(surface, EBIKE_TIRE_COLOR, (wx, wheel_cy), wheel_radius - 1)
+            # Hub
+            pygame.draw.circle(surface, EBIKE_HUB, (wx, wheel_cy), 4)
+            pygame.draw.circle(surface, OUTLINE, (wx, wheel_cy), 4, 1)
+            # Spokes
+            for ang in range(0, 360, 60):
+                rad = math.radians(ang + pedal_angle * 30)
+                sp_x = wx + math.cos(rad) * (wheel_radius - 3)
+                sp_y = wheel_cy + math.sin(rad) * (wheel_radius - 3)
+                pygame.draw.line(surface, (140, 140, 150), (wx, wheel_cy), (int(sp_x), int(sp_y)), 1)
+
+        # ── Bike frame (blue shared-bike style) ──
+        # Main frame: diamond shape
+        frame_pts = [
+            (rear_wx, wheel_cy),               # rear axle
+            (cx + 2, wheel_cy - 14),           # seat post top
+            (front_wx, wheel_cy),              # front axle
+            (cx + 10, wheel_cy - 16),          # head tube bottom
+            (cx + 8, wheel_cy - 28),           # head tube top
+            (cx - 2, wheel_cy - 14),           # seat post bottom
+        ]
+        pygame.draw.polygon(surface, EBIKE_FRAME, frame_pts)
+        pygame.draw.polygon(surface, OUTLINE, frame_pts, 1)
+
+        # Crossbar highlight
+        pygame.draw.line(surface, EBIKE_FENDER, (rear_wx + 2, wheel_cy - 2), (cx + 6, wheel_cy - 24), 2)
+
+        # ── Fenders ──
+        for fwx, fw_dir in [(rear_wx, -1), (front_wx, 1)]:
+            fender_rect = pygame.Rect(fwx - 9, wheel_cy - wheel_radius - 2, 18, 6)
+            pygame.draw.arc(surface, EBIKE_FENDER, fender_rect, math.pi, 2 * math.pi, 2)
+
+        # ── Chain / pedal area ──
+        chain_rect = pygame.Rect(cx - 6, wheel_cy - 6, 12, 8)
+        pygame.draw.ellipse(surface, EBIKE_PEDAL, chain_rect)
+        pygame.draw.ellipse(surface, OUTLINE, chain_rect, 1)
+
+        # ── Handlebars ──
+        hb_x = cx + 10
+        hb_y = wheel_cy - 28
+        pygame.draw.line(surface, EBIKE_HANDLE, (hb_x - 2, hb_y), (hb_x + 4, hb_y), 4)
+        # Grips
+        pygame.draw.circle(surface, (40, 40, 40), (hb_x - 4, hb_y), 2)
+        pygame.draw.circle(surface, (40, 40, 40), (hb_x + 6, hb_y), 2)
+
+        # ── Basket (front) ──
+        basket_rect = pygame.Rect(front_wx + 4, wheel_cy - 20, 10, 10)
+        draw_rounded_rect(surface, basket_rect, EBIKE_BASKET, 2, outline=1)
+        # Basket grid lines
+        for gx in range(basket_rect.x + 3, basket_rect.x + 9, 3):
+            pygame.draw.line(surface, (140, 140, 150), (gx, basket_rect.y), (gx, basket_rect.y + 10), 1)
+
+        # ── Seat ──
+        seat_rect = pygame.Rect(cx - 5, wheel_cy - 20, 14, 6)
+        draw_rounded_rect(surface, seat_rect, EBIKE_SEAT, 3, outline=1)
+
+        # ── Player riding (seated, upper body only) ──
+        seat_top = wheel_cy - 20
+        body_h = h - 22  # shorter body when seated
+
+        # Player body (seated, slight forward lean)
+        body_rect = pygame.Rect(x + 3, seat_top - body_h + 8, w - 6, body_h)
+        draw_rounded_rect(surface, body_rect, self.body_color, 6, outline=0)
+
+        # Arms reaching to handlebars
+        for ax_sign, ax_base in [(-1, 0), (1, 0)]:
+            arm_start_x = cx + ax_sign * 2
+            arm_start_y = seat_top - body_h + 14
+            arm_end_x = hb_x + ax_sign * 3
+            arm_end_y = hb_y + 2
+            pygame.draw.line(surface, OUTLINE, (arm_start_x, arm_start_y), (arm_end_x, arm_end_y), 4)
+            pygame.draw.line(surface, self.body_color, (arm_start_x, arm_start_y), (arm_end_x, arm_end_y), 2)
+
+        # Head
+        head_cx = cx + 2
+        head_cy = seat_top - body_h + 2
+        hair_rect = pygame.Rect(head_cx - 9, head_cy - 12, 18, 13)
+        draw_rounded_rect(surface, hair_rect, self.hair_color, 4, outline=0)
+        draw_circle_outlined(surface, (head_cx, head_cy), 10, self.skin_color, outline=0)
+        # Eye looking forward
+        eye_white = pygame.Rect(head_cx + 3, head_cy - 3, 6, 6)
+        pygame.draw.ellipse(surface, (255, 255, 255), eye_white)
+        pygame.draw.ellipse(surface, OUTLINE, eye_white, 1)
+        pygame.draw.circle(surface, (20, 20, 20), (head_cx + 6, head_cy - 1), 2)
+
+        # Speed lines / wind effect while riding
+        if self.ebike_timer > 0:
+            for si in range(3):
+                lx = x - 8 - si * 6
+                ly = int(head_cy - 4 + math.sin(self.leg_phase * 2 + si) * 3)
+                alpha = int(120 + 60 * math.sin(self.leg_phase * 3 + si))
+                wind = pygame.Surface((10, 1), pygame.SRCALPHA)
+                wind.fill((255, 255, 255, alpha))
+                surface.blit(wind, (lx, ly))
 
     def _draw_running(self, surface, x, y, w, h, cx, scale_x, scale_y):
         leg_swing = math.sin(self.leg_phase) * 14
