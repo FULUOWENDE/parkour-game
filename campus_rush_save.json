@@ -1,0 +1,115 @@
+{
+  "nickname": "闪电小橙",
+  "coins": 1760,
+  "best_distance": 1972.0000000000307,
+  "unlocked_level": 1,
+  "selected_char": 0,
+  "inventory": {
+    "umbrella": 1
+  },
+  "distance_rankings": [
+    {
+      "name": "元气小橙",
+      "distance": 1972,
+      "coins": 79
+    },
+    {
+      "name": "闪电小橙",
+      "distance": 1089,
+      "coins": 53
+    },
+    {
+      "name": "闪电小橙",
+      "distance": 1026,
+      "coins": 48
+    },
+    {
+      "name": "元气小橙",
+      "distance": 798,
+      "coins": 40
+    },
+    {
+      "name": "元气小橙",
+      "distance": 704,
+      "coins": 31
+    },
+    {
+      "name": "元气学霸",
+      "distance": 610,
+      "coins": 30
+    },
+    {
+      "name": "早八阿星",
+      "distance": 499,
+      "coins": 23
+    },
+    {
+      "name": "元气小橙",
+      "distance": 484,
+      "coins": 24
+    },
+    {
+      "name": "元气小橙",
+      "distance": 449,
+      "coins": 22
+    },
+    {
+      "name": "闪电小橙",
+      "distance": 416,
+      "coins": 22
+    },
+    {
+      "name": "元气学霸",
+      "distance": 331,
+      "coins": 17
+    },
+    {
+      "name": "闪电小橙",
+      "distance": 330,
+      "coins": 13
+    },
+    {
+      "name": "早八阿星",
+      "distance": 329,
+      "coins": 17
+    },
+    {
+      "name": "元气小橙",
+      "distance": 207,
+      "coins": 8
+    },
+    {
+      "name": "闪电小橙",
+      "distance": 198,
+      "coins": 5
+    },
+    {
+      "name": "闪电小橙",
+      "distance": 167,
+      "coins": 5
+    },
+    {
+      "name": "闪电小橙",
+      "distance": 144,
+      "coins": 3
+    }
+  ],
+  "wealth_rankings": [
+    {
+      "name": "闪电小橙",
+      "coins": 1760
+    },
+    {
+      "name": "元气小橙",
+      "coins": 1673
+    },
+    {
+      "name": "元气学霸",
+      "coins": 1469
+    },
+    {
+      "name": "早八阿星",
+      "coins": 1422
+    }
+  ]
+}
